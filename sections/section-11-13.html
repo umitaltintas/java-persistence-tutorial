@@ -1,0 +1,291 @@
+<!-- Section 11: R2DBC ve Reaktif Veri Erişimi -->
+<section class="tutorial-section" id="section-11" data-section="11">
+  <h2 class="section-title"><span class="section-number">11</span> R2DBC ve Reaktif Veri Erişimi</h2>
+
+  <div class="concept-box">
+    <h4>R2DBC Nedir?</h4>
+    <p>R2DBC (Reactive Relational Database Connectivity), JDBC'nin reaktif (non-blocking, asenkron) karşılığıdır. Sanal iş parçacıkları (Virtual Threads) öncesinde çok sayıda eşzamanlı bağlantıyı yönetmek için tasarlanmıştır.</p>
+  </div>
+
+  <h3>11.1 Spring Data R2DBC Kullanımı</h3>
+
+  <pre><code class="language-java">// Entity tanimi (JPA anotasyonlari KULLANILMAZ)
+import org.springframework.data.annotation.Id;
+import org.springframework.data.relational.core.mapping.Table;
+
+@Table("products")
+public class Product {
+    @Id
+    private Long id;
+    private String name;
+    private BigDecimal price;
+    // Getter/Setter...
+}
+
+// Repository
+public interface ProductRepository extends ReactiveCrudRepository&lt;Product, Long&gt; {
+    Flux&lt;Product&gt; findByCategory(String category);
+    Mono&lt;Product&gt; findByName(String name);
+}
+
+// Servis — Reaktif (Non-Blocking)
+@Service
+public class ProductService {
+
+    @Autowired
+    private ProductRepository repository;
+
+    public Flux&lt;Product&gt; getExpensiveProducts(BigDecimal minPrice) {
+        return repository.findAll()
+            .filter(p -&gt; p.getPrice().compareTo(minPrice) &gt; 0)
+            .sort(Comparator.comparing(Product::getPrice).reversed());
+    }
+
+    public Mono&lt;Product&gt; createProduct(Product product) {
+        return repository.save(product);
+    }
+}</code></pre>
+
+  <h3>11.2 R2DBC Ne Zaman Kullanılır?</h3>
+
+  <ul>
+    <li>Çok yüksek eşzamanlılık gerektiren uygulamalar (chat, gerçek zamanlı bildirim)</li>
+    <li>WebFlux (reaktif web çerçevesi) kullanıyorsanız</li>
+  </ul>
+
+  <div class="warning-box">
+    <strong>Dikkat:</strong> Java 21+ ile gelen Virtual Threads, R2DBC'nin çözdüğü problemi büyük ölçüde ortadan kaldırdı. Yeni projelerde Virtual Threads + JDBC tercih edilebilir.
+  </div>
+
+  <div class="quiz-container" data-section="11">
+    <h3 class="quiz-title">Bilgi Kontrolü</h3>
+    <div class="quiz-question" data-correct="B">
+      <p class="question-text">1. R2DBC hangi programlama modelini kullanır?</p>
+      <div class="quiz-options">
+        <button class="quiz-option" data-value="A">A) Senkron (blocking)</button>
+        <button class="quiz-option" data-value="B">B) Reaktif (non-blocking, asenkron)</button>
+        <button class="quiz-option" data-value="C">C) Paralel thread havuzu</button>
+      </div>
+      <div class="quiz-feedback correct-feedback">✓ Doğru! R2DBC, JDBC'nin reaktif (non-blocking, asenkron) karşılığıdır.</div>
+      <div class="quiz-feedback incorrect-feedback">✗ Yanlış. Doğru cevap: B) R2DBC reaktif (non-blocking, asenkron) model kullanır.</div>
+    </div>
+    <div class="quiz-question" data-correct="C">
+      <p class="question-text">2. Spring Data R2DBC'de repository hangi arayüzü extends eder?</p>
+      <div class="quiz-options">
+        <button class="quiz-option" data-value="A">A) JpaRepository</button>
+        <button class="quiz-option" data-value="B">B) CrudRepository</button>
+        <button class="quiz-option" data-value="C">C) ReactiveCrudRepository</button>
+      </div>
+      <div class="quiz-feedback correct-feedback">✓ Doğru! R2DBC'de ReactiveCrudRepository kullanılır ve Flux/Mono döndürülür.</div>
+      <div class="quiz-feedback incorrect-feedback">✗ Yanlış. Doğru cevap: C) ReactiveCrudRepository — reaktif tipleri (Flux, Mono) döndürür.</div>
+    </div>
+    <div class="quiz-question" data-correct="A">
+      <p class="question-text">3. Java 21+ ile birlikte R2DBC yerine hangi alternatif önerilmektedir?</p>
+      <div class="quiz-options">
+        <button class="quiz-option" data-value="A">A) Virtual Threads + JDBC</button>
+        <button class="quiz-option" data-value="B">B) Project Loom + R2DBC</button>
+        <button class="quiz-option" data-value="C">C) Coroutines + JDBC</button>
+      </div>
+      <div class="quiz-feedback correct-feedback">✓ Doğru! Virtual Threads, R2DBC'nin çözdüğü problemi büyük ölçüde ortadan kaldırmıştır.</div>
+      <div class="quiz-feedback incorrect-feedback">✗ Yanlış. Doğru cevap: A) Virtual Threads + JDBC — yeni projelerde tercih edilebilir.</div>
+    </div>
+  </div>
+</section>
+
+<!-- Section 12: Jakarta Data — Yeni Stateless Standart -->
+<section class="tutorial-section" id="section-12" data-section="12">
+  <h2 class="section-title"><span class="section-number">12</span> Jakarta Data — Yeni Stateless Standart</h2>
+
+  <div class="concept-box">
+    <h4>Jakarta Data Nedir?</h4>
+    <p>Jakarta Data, Spring Data'dan ilham alan ama <strong>standart</strong> (vendor-bağımsız) bir Repository API'sidir. JPA'nın aksine <strong>Stateless</strong> (durumsuz) çalışır — Persistence Context yoktur. Hibernate 6.6+ tarafından desteklenir.</p>
+  </div>
+
+  <h3>12.1 Temel Kullanım</h3>
+
+  <pre><code class="language-java">import jakarta.data.repository.CrudRepository;
+import jakarta.data.repository.Find;
+import jakarta.data.repository.Query;
+import jakarta.data.repository.Repository;
+
+@Repository
+public interface ProductRepository extends CrudRepository&lt;Product, Long&gt; {
+
+    @Find
+    List&lt;Product&gt; findByCategory(String category);
+
+    @Query("SELECT p FROM Product p WHERE p.price &gt; :minPrice")
+    List&lt;Product&gt; findExpensive(BigDecimal minPrice);
+}</code></pre>
+
+  <h3>12.2 Stateless vs Stateful (JPA ile Fark)</h3>
+
+  <table class="comparison-table">
+    <thead>
+      <tr>
+        <th>Özellik</th>
+        <th>JPA (Stateful)</th>
+        <th>Jakarta Data (Stateless)</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Persistence Context</td>
+        <td>Var</td>
+        <td>Yok</td>
+      </tr>
+      <tr>
+        <td>Dirty Checking</td>
+        <td>Var (Otomatik UPDATE)</td>
+        <td>Yok</td>
+      </tr>
+      <tr>
+        <td>save() Zorunluluğu</td>
+        <td>Managed ise gereksiz</td>
+        <td>HER ZAMAN zorunlu</td>
+      </tr>
+      <tr>
+        <td>Öğrenme Eğrisi</td>
+        <td>Daha dik (sihir)</td>
+        <td>Daha kolay (açık)</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="tip-box">
+    <strong>İpucu:</strong> Jakarta Data, Persistence Context olmadığı için Dirty Checking yapılmaz. Değişikliklerin veritabanına yansıması için her zaman <code>save()</code> çağrısı zorunludur.
+  </div>
+
+  <div class="quiz-container" data-section="12">
+    <h3 class="quiz-title">Bilgi Kontrolü</h3>
+    <div class="quiz-question" data-correct="C">
+      <p class="question-text">1. Jakarta Data'nın JPA'dan temel farkı nedir?</p>
+      <div class="quiz-options">
+        <button class="quiz-option" data-value="A">A) Daha hızlı sorgular çalıştırır</button>
+        <button class="quiz-option" data-value="B">B) Sadece NoSQL veritabanlarını destekler</button>
+        <button class="quiz-option" data-value="C">C) Stateless çalışır — Persistence Context yoktur</button>
+      </div>
+      <div class="quiz-feedback correct-feedback">✓ Doğru! Jakarta Data stateless çalışır, Persistence Context ve Dirty Checking yoktur.</div>
+      <div class="quiz-feedback incorrect-feedback">✗ Yanlış. Doğru cevap: C) Jakarta Data stateless çalışır — Persistence Context yoktur.</div>
+    </div>
+    <div class="quiz-question" data-correct="B">
+      <p class="question-text">2. Jakarta Data'da bir entity değiştiğinde ne yapılmalıdır?</p>
+      <div class="quiz-options">
+        <button class="quiz-option" data-value="A">A) Dirty Checking otomatik olarak günceller</button>
+        <button class="quiz-option" data-value="B">B) save() metodu çağrılmalıdır</button>
+        <button class="quiz-option" data-value="C">C) flush() yeterlidir</button>
+      </div>
+      <div class="quiz-feedback correct-feedback">✓ Doğru! Jakarta Data'da Dirty Checking olmadığı için save() HER ZAMAN zorunludur.</div>
+      <div class="quiz-feedback incorrect-feedback">✗ Yanlış. Doğru cevap: B) save() çağrılmalıdır — Dirty Checking yoktur.</div>
+    </div>
+  </div>
+</section>
+
+<!-- Section 13: Hibernate Search ve Tam Metin Arama -->
+<section class="tutorial-section" id="section-13" data-section="13">
+  <h2 class="section-title"><span class="section-number">13</span> Hibernate Search ve Tam Metin Arama</h2>
+
+  <div class="concept-box">
+    <h4>Neden Tam Metin Arama?</h4>
+    <p>SQL'deki <code>LIKE '%kelime%'</code> sorgusu büyük verilerde yavaştır ve akıllı arama (typo toleransı, eşanlamlılar) yapamaz. Hibernate Search, Apache Lucene motorunu kullanarak Google benzeri tam metin arama özelliği sunar.</p>
+  </div>
+
+  <h3>13.1 Entity'ye Arama Desteği Eklemek</h3>
+
+  <pre><code class="language-java">import org.hibernate.search.mapper.pojo.mapping.definition.annotation.*;
+
+@Entity
+@Indexed  // Bu entity aranabilir!
+public class Product {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @FullTextField(analyzer = "turkish")  // Tam metin arama alani
+    private String name;
+
+    @FullTextField(analyzer = "turkish")
+    private String description;
+
+    @KeywordField  // Tam eslesme (filtreleme icin)
+    private String category;
+
+    @GenericField(sortable = Sortable.YES)  // Siralanabilir
+    private BigDecimal price;
+}</code></pre>
+
+  <div class="tip-box">
+    <strong>Anotasyon Rehberi:</strong>
+    <ul>
+      <li><code>@Indexed</code> — Entity'yi aranabilir yapar</li>
+      <li><code>@FullTextField</code> — Tam metin arama alanı (analyzer ile dil desteği)</li>
+      <li><code>@KeywordField</code> — Tam eşleşme için (filtreleme amaçlı)</li>
+      <li><code>@GenericField(sortable = Sortable.YES)</code> — Sıralanabilir alan</li>
+    </ul>
+  </div>
+
+  <h3>13.2 Arama Sorgusu</h3>
+
+  <pre><code class="language-java">@Service
+public class ProductSearchService {
+
+    @PersistenceContext
+    private EntityManager entityManager;
+
+    @Transactional(readOnly = true)
+    public List&lt;Product&gt; search(String keyword) {
+        SearchSession searchSession = Search.session(entityManager);
+
+        SearchResult&lt;Product&gt; result = searchSession.search(Product.class)
+            .where(f -&gt; f.match()
+                .fields("name", "description")
+                .matching(keyword)
+                .fuzzy(1))  // 1 karakter hata toleransi ("laptob" → "laptop")
+            .sort(f -&gt; f.score())  // Alaka duzeyine gore sirala
+            .fetchAll();
+
+        return result.hits();
+    }
+}</code></pre>
+
+  <div class="concept-box">
+    <h4>Fuzzy Arama</h4>
+    <p><code>.fuzzy(1)</code> ifadesi, 1 karakter hata toleransı sağlar. Örneğin "laptob" yazıldığında "laptop" sonucu bulunur. Bu, kullanıcı deneyimini önemli ölçüde iyileştirir.</p>
+  </div>
+
+  <div class="quiz-container" data-section="13">
+    <h3 class="quiz-title">Bilgi Kontrolü</h3>
+    <div class="quiz-question" data-correct="B">
+      <p class="question-text">1. Hibernate Search hangi motoru kullanarak tam metin arama yapar?</p>
+      <div class="quiz-options">
+        <button class="quiz-option" data-value="A">A) Elasticsearch (varsayılan)</button>
+        <button class="quiz-option" data-value="B">B) Apache Lucene</button>
+        <button class="quiz-option" data-value="C">C) SQL Full-Text Index</button>
+      </div>
+      <div class="quiz-feedback correct-feedback">✓ Doğru! Hibernate Search, Apache Lucene motorunu kullanarak tam metin arama özelliği sunar.</div>
+      <div class="quiz-feedback incorrect-feedback">✗ Yanlış. Doğru cevap: B) Apache Lucene — Hibernate Search'ün temel arama motorudur.</div>
+    </div>
+    <div class="quiz-question" data-correct="A">
+      <p class="question-text">2. @FullTextField ve @KeywordField arasındaki fark nedir?</p>
+      <div class="quiz-options">
+        <button class="quiz-option" data-value="A">A) @FullTextField metin analizi yapar, @KeywordField tam eşleşme arar</button>
+        <button class="quiz-option" data-value="B">B) @FullTextField sadece Türkçe destekler, @KeywordField tüm diller</button>
+        <button class="quiz-option" data-value="C">C) Fark yoktur, ikisi de aynı işi yapar</button>
+      </div>
+      <div class="quiz-feedback correct-feedback">✓ Doğru! @FullTextField analyzer ile metin analizi yapar, @KeywordField ise tam eşleşme (filtreleme) içindir.</div>
+      <div class="quiz-feedback incorrect-feedback">✗ Yanlış. Doğru cevap: A) @FullTextField metin analizi yapar (dil desteği ile), @KeywordField tam eşleşme için kullanılır.</div>
+    </div>
+    <div class="quiz-question" data-correct="C">
+      <p class="question-text">3. fuzzy(1) ne anlama gelir?</p>
+      <div class="quiz-options">
+        <button class="quiz-option" data-value="A">A) Sonuçları 1 saniye gecikmeyle döndürür</button>
+        <button class="quiz-option" data-value="B">B) En fazla 1 sonuç döndürür</button>
+        <button class="quiz-option" data-value="C">C) 1 karakter hata toleransı sağlar</button>
+      </div>
+      <div class="quiz-feedback correct-feedback">✓ Doğru! fuzzy(1) ile "laptob" yazıldığında "laptop" bulunabilir.</div>
+      <div class="quiz-feedback incorrect-feedback">✗ Yanlış. Doğru cevap: C) 1 karakter hata toleransı — örneğin "laptob" yazılınca "laptop" bulunur.</div>
+    </div>
+  </div>
+</section>
+

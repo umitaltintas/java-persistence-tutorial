@@ -1,0 +1,375 @@
+<!-- Section 1: Ekosisteme Genel Bakis -->
+<section class="tutorial-section" id="section-1" data-section="1">
+  <h2 class="section-title"><span class="section-number">1</span> Ekosisteme Genel Bakis</h2>
+
+  <p>Java'da veri tabani erisimi tek bir aractan ibaret degildir. Katmanli bir yapi soz konusudur:</p>
+
+  <div class="diagram-box"><pre>
++-------------------------------------------------------------+
+|  GELISTIRICI KODU (Sen burada yaziyorsun)                    |
++-------------------------------------------------------------+
+|  Spring Data JPA / Spring Data JDBC / Spring Data R2DBC      |  &lt;- Ust duzey soyutlama
++-------------------------------------------------------------+
+|  Jakarta Persistence (JPA) / Jakarta Data                    |  &lt;- Standartlar (Kurallar)
++-------------------------------------------------------------+
+|  Hibernate / EclipseLink                                     |  &lt;- ORM Motorlari (Uygulayicilar)
++-------------------------------------------------------------+
+|  JDBC / R2DBC                                                |  &lt;- Dusuk seviye DB baglantisi
++-------------------------------------------------------------+
+|  PostgreSQL / MySQL / Oracle                                 |  &lt;- Veri Tabani
++-------------------------------------------------------------+
+</pre></div>
+
+  <h3>Katmanlar Arasi Iliski</h3>
+
+  <div class="concept-box">
+    <h4>JDBC</h4>
+    <p>Java'nin veri tabanlariyla konusmak icin kullandigi en temel API. Tum ORM araclari sonucta JDBC uzerinden SQL calistirir.</p>
+  </div>
+
+  <div class="concept-box">
+    <h4>JPA (Jakarta Persistence)</h4>
+    <p>Bir <strong>spesifikasyon</strong> (kural seti). Tek basina is yapmaz. "Entity nasil tanimlanir, sorgu nasil yazilir" gibi kurallari belirler.</p>
+  </div>
+
+  <div class="concept-box">
+    <h4>Hibernate</h4>
+    <p>JPA spesifikasyonunu <strong>uygulayan</strong> (implement eden) bir kutuphane. Gercek isi yapan motordur. EclipseLink ise alternatifidir.</p>
+  </div>
+
+  <div class="concept-box">
+    <h4>Spring Data JPA</h4>
+    <p>Hibernate ve JPA uzerine bir soyutlama katmanidir. Gelistiriciyi tekrarlayan koddan kurtarir.</p>
+  </div>
+
+  <div class="concept-box">
+    <h4>jOOQ</h4>
+    <p>ORM degildir. SQL'i Java kodu icinde tip guvenli (type-safe) yazmayi saglar.</p>
+  </div>
+
+  <div class="quiz-container" data-section="1">
+    <h3 class="quiz-title">Bilgi Kontrolu</h3>
+
+    <div class="quiz-question" data-correct="B">
+      <p class="question-text">1. JPA (Jakarta Persistence) nedir?</p>
+      <div class="quiz-options">
+        <button class="quiz-option" data-value="A">A) Bir ORM kutuphanesi</button>
+        <button class="quiz-option" data-value="B">B) Bir spesifikasyon (kural seti)</button>
+        <button class="quiz-option" data-value="C">C) Bir veri tabani suruculeri (driver)</button>
+      </div>
+      <div class="quiz-feedback correct-feedback">Dogru! JPA bir spesifikasyondur, tek basina is yapmaz. Kurallari belirler, uygulamayi Hibernate gibi motorlar yapar.</div>
+      <div class="quiz-feedback incorrect-feedback">Yanlis. Dogru cevap: B) JPA bir spesifikasyondur (kural seti). Tek basina is yapmaz, kurallari belirler.</div>
+    </div>
+
+    <div class="quiz-question" data-correct="C">
+      <p class="question-text">2. Asagidakilerden hangisi Java persistence katman sirasinda en altta yer alir?</p>
+      <div class="quiz-options">
+        <button class="quiz-option" data-value="A">A) Spring Data JPA</button>
+        <button class="quiz-option" data-value="B">B) Hibernate</button>
+        <button class="quiz-option" data-value="C">C) JDBC</button>
+      </div>
+      <div class="quiz-feedback correct-feedback">Dogru! JDBC en dusuk seviye DB baglanti katmanidir. Tum ORM araclari sonucta JDBC uzerinden SQL calistirir.</div>
+      <div class="quiz-feedback incorrect-feedback">Yanlis. Dogru cevap: C) JDBC en dusuk seviye API'dir ve tum araclar sonucta JDBC uzerinden calisir.</div>
+    </div>
+
+    <div class="quiz-question" data-correct="A">
+      <p class="question-text">3. jOOQ icin asagidakilerden hangisi dogrudur?</p>
+      <div class="quiz-options">
+        <button class="quiz-option" data-value="A">A) ORM degildir, SQL'i tip guvenli yazmaya yarar</button>
+        <button class="quiz-option" data-value="B">B) JPA spesifikasyonunun bir uygulamasidir</button>
+        <button class="quiz-option" data-value="C">C) Spring Data JPA'nin alternatif adidir</button>
+      </div>
+      <div class="quiz-feedback correct-feedback">Dogru! jOOQ bir ORM degildir. SQL'i Java kodu icinde tip guvenli (type-safe) yazmaya olanak saglar.</div>
+      <div class="quiz-feedback incorrect-feedback">Yanlis. Dogru cevap: A) jOOQ ORM degildir, SQL'i Java kodu icinde tip guvenli yazmaya yarar.</div>
+    </div>
+  </div>
+</section>
+
+<!-- Section 2: JDBC -->
+<section class="tutorial-section" id="section-2" data-section="2">
+  <h2 class="section-title"><span class="section-number">2</span> JDBC &mdash; Her Seyin Temeli</h2>
+
+  <p>JDBC (Java Database Connectivity), Java'nin veri tabanina baglanmak icin sundugu en dusuk seviye API'dir. Her arac sonucta JDBC kullanir.</p>
+
+  <h3>2.1 JDBC ile Basit Sorgu</h3>
+
+  <pre><code class="language-java">import java.sql.*;
+
+public class JdbcExample {
+
+    public static void main(String[] args) throws Exception {
+        // 1. Baglanti kur
+        String url = "jdbc:postgresql://localhost:5432/mydb";
+        Connection conn = DriverManager.getConnection(url, "user", "password");
+
+        // 2. SQL hazirla (PreparedStatement ile SQL Injection korumasi)
+        String sql = "SELECT id, name, price FROM products WHERE category = ?";
+        PreparedStatement stmt = conn.prepareStatement(sql);
+        stmt.setString(1, "ELECTRONICS");
+
+        // 3. Calistir ve sonuclari oku
+        ResultSet rs = stmt.executeQuery();
+        while (rs.next()) {
+            long id = rs.getLong("id");
+            String name = rs.getString("name");
+            BigDecimal price = rs.getBigDecimal("price");
+            System.out.println(id + " - " + name + " - " + price);
+        }
+
+        // 4. Kaynaklari kapat
+        rs.close();
+        stmt.close();
+        conn.close();
+    }
+}</code></pre>
+
+  <h3>2.2 JDBC'nin Sorunlari (Neden ORM'e Ihtiyac Duyuldu?)</h3>
+
+  <table class="info-table">
+    <thead>
+      <tr>
+        <th>Sorun</th>
+        <th>Aciklama</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Boilerplate Kod</strong></td>
+        <td>Her sorgu icin baglanti ac, statement hazirla, sonuc oku, kapat &mdash; tekrar tekrar</td>
+      </tr>
+      <tr>
+        <td><strong>Tip Donusumu</strong></td>
+        <td><code>rs.getString()</code>, <code>rs.getLong()</code> &mdash; her sutunu elle donusturmen gerekir</td>
+      </tr>
+      <tr>
+        <td><strong>Nesne-Tablo Uyumsuzlugu</strong></td>
+        <td>SQL tablolari duz (flat), Java nesneleri hiyerarsik &mdash; donusum zor</td>
+      </tr>
+      <tr>
+        <td><strong>Veritabani Bagimliligi</strong></td>
+        <td>Farkli DB'lerde SQL sozdizimi farkli olabilir</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="tip-box">
+    <p>Bu sorunlar ORM (Object-Relational Mapping) kavramini dogurdu. ORM, Java nesneleri ile veri tabani tablolari arasindaki eslesmeyi otomatik hale getirir.</p>
+  </div>
+
+  <div class="quiz-container" data-section="2">
+    <h3 class="quiz-title">Bilgi Kontrolu</h3>
+
+    <div class="quiz-question" data-correct="B">
+      <p class="question-text">1. JDBC'de SQL Injection saldirisina karsi hangi yapi kullanilir?</p>
+      <div class="quiz-options">
+        <button class="quiz-option" data-value="A">A) Statement</button>
+        <button class="quiz-option" data-value="B">B) PreparedStatement</button>
+        <button class="quiz-option" data-value="C">C) ResultSet</button>
+      </div>
+      <div class="quiz-feedback correct-feedback">Dogru! PreparedStatement, parametreleri guvenli sekilde baglar ve SQL Injection saldirilarina karsi koruma saglar.</div>
+      <div class="quiz-feedback incorrect-feedback">Yanlis. Dogru cevap: B) PreparedStatement, SQL Injection'a karsi koruma saglar.</div>
+    </div>
+
+    <div class="quiz-question" data-correct="C">
+      <p class="question-text">2. Asagidakilerden hangisi JDBC'nin sorunlarindan biri degildir?</p>
+      <div class="quiz-options">
+        <button class="quiz-option" data-value="A">A) Boilerplate kod fazlaligi</button>
+        <button class="quiz-option" data-value="B">B) Manuel tip donusumu gerekliligi</button>
+        <button class="quiz-option" data-value="C">C) Otomatik nesne-tablo eslesmesi</button>
+      </div>
+      <div class="quiz-feedback correct-feedback">Dogru! Otomatik nesne-tablo eslesmesi JDBC'de yoktur, bu bir sorun degil, eksikliktir. ORM araclari bu eksikligi giderir.</div>
+      <div class="quiz-feedback incorrect-feedback">Yanlis. Dogru cevap: C) Otomatik nesne-tablo eslesmesi JDBC'de bulunmaz, bu bir sorun degil eksikliktir.</div>
+    </div>
+
+    <div class="quiz-question" data-correct="A">
+      <p class="question-text">3. JDBC ile calisilindiginda kaynaklarin (Connection, Statement, ResultSet) kapatilmamasi ne gibi bir soruna yol acar?</p>
+      <div class="quiz-options">
+        <button class="quiz-option" data-value="A">A) Bellek sizintisi ve baglanti havuzu tukenmesi</button>
+        <button class="quiz-option" data-value="B">B) SQL sorgularinin yavaslamasi</button>
+        <button class="quiz-option" data-value="C">C) Otomatik olarak garbage collector tarafindan temizlenir, sorun olmaz</button>
+      </div>
+      <div class="quiz-feedback correct-feedback">Dogru! Kapatilmayan kaynaklar bellek sizintisina ve baglanti havuzunun tukenmesine yol acar.</div>
+      <div class="quiz-feedback incorrect-feedback">Yanlis. Dogru cevap: A) Kapatilmayan kaynaklar bellek sizintisi ve baglanti havuzu tukenmesine yol acar.</div>
+    </div>
+  </div>
+</section>
+
+<!-- Section 3: JPA -->
+<section class="tutorial-section" id="section-3" data-section="3">
+  <h2 class="section-title"><span class="section-number">3</span> JPA (Jakarta Persistence) &mdash; ORM Standardi</h2>
+
+  <p>JPA bir <strong>spesifikasyondur</strong>, kutuphane degildir. "Java'da ORM nasil yapilir" sorusunun kurallarini belirler. Eski adi Java Persistence API, yenisi Jakarta Persistence'dir.</p>
+
+  <h3>3.1 Entity Tanimlama</h3>
+
+  <p>JPA'da bir Java sinifini veri tabani tablosuna eslemek icin anotasyonlar kullanilir:</p>
+
+  <pre><code class="language-java">import jakarta.persistence.*;
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+
+@Entity                          // Bu sinif bir veri tabani tablosuna karsilik gelir
+@Table(name = "products")       // Tablo adi (yazilmazsa sinif adi kullanilir)
+public class Product {
+
+    @Id                          // Birincil anahtar (Primary Key)
+    @GeneratedValue(strategy = GenerationType.IDENTITY)  // DB otomatik artan ID uretir
+    private Long id;
+
+    @Column(nullable = false, length = 200)  // NOT NULL, max 200 karakter
+    private String name;
+
+    @Column(precision = 10, scale = 2)  // Ondalikli sayi: 10 basamak, 2'si ondalik
+    private BigDecimal price;
+
+    @Column(columnDefinition = "TEXT")   // Uzun metin
+    private String description;
+
+    @Column(name = "created_at")         // Sutun adi Java'daki field adindan farkliysa
+    private LocalDateTime createdAt;
+
+    @Enumerated(EnumType.STRING)         // Enum'u string olarak DB'ye yaz
+    private ProductStatus status;
+
+    // Getter ve Setter'lar
+    public Long getId() { return id; }
+    public void setId(Long id) { this.id = id; }
+
+    public String getName() { return name; }
+    public void setName(String name) { this.name = name; }
+
+    public BigDecimal getPrice() { return price; }
+    public void setPrice(BigDecimal price) { this.price = price; }
+
+    public String getDescription() { return description; }
+    public void setDescription(String description) { this.description = description; }
+
+    public LocalDateTime getCreatedAt() { return createdAt; }
+    public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+
+    public ProductStatus getStatus() { return status; }
+    public void setStatus(ProductStatus status) { this.status = status; }
+}</code></pre>
+
+  <div class="concept-box">
+    <h4>Temel JPA Anotasyonlari</h4>
+    <p><code>@Entity</code> &mdash; Sinifi bir veri tabani tablosuna esler.<br>
+    <code>@Table</code> &mdash; Tablo adini belirtir (yazilmazsa sinif adi kullanilir).<br>
+    <code>@Id</code> &mdash; Birincil anahtari (Primary Key) isaretler.<br>
+    <code>@GeneratedValue</code> &mdash; ID uretim stratejisini belirler.<br>
+    <code>@Column</code> &mdash; Sutun ozelliklerini tanimlar (nullable, length, precision vb.).<br>
+    <code>@Enumerated</code> &mdash; Enum degerlerinin DB'ye nasil yazilacagini belirler.</p>
+  </div>
+
+  <h3>3.2 Iliski (Relationship) Tanimlama</h3>
+
+  <pre><code class="language-java">@Entity
+@Table(name = "orders")
+public class Order {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    private String status;
+
+    // Bir siparisin birden fazla kalemi olabilir (One-to-Many)
+    @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List&lt;OrderItem&gt; items = new ArrayList&lt;&gt;();
+
+    // Bir siparisin bir kullanicisi vardir (Many-to-One)
+    @ManyToOne(fetch = FetchType.LAZY)   // LAZY: Kullanici bilgisi istenene kadar yukleme
+    @JoinColumn(name = "user_id")
+    private User user;
+}
+
+@Entity
+@Table(name = "order_items")
+public class OrderItem {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    private int quantity;
+    private BigDecimal unitPrice;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "order_id")
+    private Order order;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "product_id")
+    private Product product;
+}</code></pre>
+
+  <div class="concept-box">
+    <h4>Iliski Tipleri</h4>
+    <p><code>@OneToMany</code> &mdash; Bir nesnenin birden fazla alt nesnesi olabilir (ornegin bir siparisin bircok kalemi).<br>
+    <code>@ManyToOne</code> &mdash; Bircok nesne tek bir ust nesneye bagli olabilir.<br>
+    <code>mappedBy</code> &mdash; Iliskinin sahibi olmayan tarafi belirtir.<br>
+    <code>cascade = CascadeType.ALL</code> &mdash; Ana nesne uzerindeki islemler alt nesnelere de uygulanir.<br>
+    <code>orphanRemoval = true</code> &mdash; Listeden cikarilan alt nesneler DB'den de silinir.<br>
+    <code>FetchType.LAZY</code> &mdash; Iliskili veri, ihtiyac duyulana kadar yuklenmez (performans icin onemli).</p>
+  </div>
+
+  <div class="warning-box">
+    <p><strong>Dikkat:</strong> <code>FetchType.LAZY</code> kullanildiginda, iliskili veriye <code>@Transactional</code> kapsami disinda erismeye calismak <code>LazyInitializationException</code> hatasina neden olur. Iliskili verilere her zaman aktif bir transaction icinde erisin.</p>
+  </div>
+
+  <h3>3.3 JPQL (Java Persistence Query Language)</h3>
+
+  <p>JPA kendi sorgu dilini sunar. SQL'e benzer ama <strong>tablo</strong> yerine <strong>Java sinifi</strong> adlarini kullanir:</p>
+
+  <pre><code class="language-java">// SQL:  SELECT * FROM products WHERE price &gt; 100
+// JPQL: SELECT p FROM Product p WHERE p.price &gt; 100
+
+// SQL:  SELECT p.name, COUNT(oi.id)
+//       FROM products p JOIN order_items oi ON p.id = oi.product_id
+//       GROUP BY p.name
+// JPQL:
+@Query("SELECT p.name, COUNT(oi) FROM Product p JOIN p.orderItems oi GROUP BY p.name")
+List&lt;Object[]&gt; getProductOrderCounts();</code></pre>
+
+  <div class="concept-box">
+    <h4>JPQL ve SQL Arasindaki Fark</h4>
+    <p>JPQL, SQL'e cok benzer ancak temel bir farki vardir: SQL tablo ve sutun adlarini kullanirken, JPQL Java sinif ve alan (field) adlarini kullanir. Bu sayede veri tabani bagimsiz sorgular yazilabilir. Ornegin SQL'de <code>SELECT * FROM products</code> yazilirken, JPQL'de <code>SELECT p FROM Product p</code> yazilir.</p>
+  </div>
+
+  <div class="quiz-container" data-section="3">
+    <h3 class="quiz-title">Bilgi Kontrolu</h3>
+
+    <div class="quiz-question" data-correct="A">
+      <p class="question-text">1. JPA'da bir sinifi veri tabani tablosuna eslemek icin hangi anotasyon kullanilir?</p>
+      <div class="quiz-options">
+        <button class="quiz-option" data-value="A">A) @Entity</button>
+        <button class="quiz-option" data-value="B">B) @Table</button>
+        <button class="quiz-option" data-value="C">C) @Column</button>
+      </div>
+      <div class="quiz-feedback correct-feedback">Dogru! @Entity anotasyonu bir Java sinifini veri tabani tablosuna esler. @Table ise tablo adini belirtmek icin kullanilir.</div>
+      <div class="quiz-feedback incorrect-feedback">Yanlis. Dogru cevap: A) @Entity anotasyonu sinifi veri tabani tablosuna esler.</div>
+    </div>
+
+    <div class="quiz-question" data-correct="C">
+      <p class="question-text">2. JPQL'de SQL'den farkli olarak ne kullanilir?</p>
+      <div class="quiz-options">
+        <button class="quiz-option" data-value="A">A) Tablo adlari ve sutun adlari</button>
+        <button class="quiz-option" data-value="B">B) Sadece native SQL sorculari</button>
+        <button class="quiz-option" data-value="C">C) Java sinif adlari ve alan (field) adlari</button>
+      </div>
+      <div class="quiz-feedback correct-feedback">Dogru! JPQL, tablo ve sutun adlari yerine Java sinif ve alan adlarini kullanir. Bu sayede veri tabani bagimsiz sorgular yazilabilir.</div>
+      <div class="quiz-feedback incorrect-feedback">Yanlis. Dogru cevap: C) JPQL, Java sinif adlari ve alan (field) adlarini kullanir.</div>
+    </div>
+
+    <div class="quiz-question" data-correct="B">
+      <p class="question-text">3. @ManyToOne(fetch = FetchType.LAZY) ne anlama gelir?</p>
+      <div class="quiz-options">
+        <button class="quiz-option" data-value="A">A) Iliskili veri her zaman aninda yuklenir</button>
+        <button class="quiz-option" data-value="B">B) Iliskili veri, ihtiyac duyulana kadar yuklenmez</button>
+        <button class="quiz-option" data-value="C">C) Iliski tamamen devre disi birakilir</button>
+      </div>
+      <div class="quiz-feedback correct-feedback">Dogru! FetchType.LAZY, iliskili verinin ihtiyac duyulana kadar yuklenmemesini saglar. Bu, performans icin onemlidir.</div>
+      <div class="quiz-feedback incorrect-feedback">Yanlis. Dogru cevap: B) LAZY fetch stratejisi, iliskili verinin ihtiyac duyulana kadar yuklenmemesini saglar.</div>
+    </div>
+  </div>
+</section>

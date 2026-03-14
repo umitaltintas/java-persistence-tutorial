@@ -1,0 +1,554 @@
+<!-- Section 4: Hibernate — JPA'nın Motoru -->
+<section class="tutorial-section" id="section-4" data-section="4">
+  <h2 class="section-title"><span class="section-number">4</span> Hibernate &mdash; JPA'nın Motoru</h2>
+
+  <div class="concept-box">
+    <h4>Hibernate Nedir?</h4>
+    <p>Hibernate, JPA spesifikasyonunu uygulayan en yaygın ORM çerçevesidir. Spring Boot kullandığında arka planda Hibernate çalışır.</p>
+  </div>
+
+  <h3>4.1 Hibernate'in Yaptığı İş</h3>
+
+  <table class="info-table">
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Giriş</th>
+        <th>Çıkış</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>1</td>
+        <td>Entity sınıflarını okur</td>
+        <td>SQL <code>CREATE TABLE</code> ifadeleri üretir (geliştirme ortamında)</td>
+      </tr>
+      <tr>
+        <td>2</td>
+        <td><code>save()</code> çağrısını</td>
+        <td>SQL <code>INSERT INTO</code> ifadesine çevirir</td>
+      </tr>
+      <tr>
+        <td>3</td>
+        <td>JPQL sorgularını</td>
+        <td>Veri tabanına özel SQL'e çevirir</td>
+      </tr>
+      <tr>
+        <td>4</td>
+        <td>Entity değişikliklerini takip eder</td>
+        <td>Otomatik <code>UPDATE</code> üretir (Dirty Checking)</td>
+      </tr>
+      <tr>
+        <td>5</td>
+        <td>İlişkileri (Relationship) yönetir</td>
+        <td>Gerektiğinde <code>JOIN</code> sorguları üretir</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>4.2 EntityManager &mdash; JPA'nın Temel Arayüzü</h3>
+
+  <pre><code class="language-java">@Service
+public class ProductServiceWithEM {
+
+    @PersistenceContext
+    private EntityManager entityManager;
+
+    @Transactional
+    public void entityManagerExamples() {
+
+        // --- persist(): Yeni kayit ekler ---
+        Product newProduct = new Product();
+        newProduct.setName("Mouse");
+        newProduct.setPrice(new BigDecimal("29.99"));
+        entityManager.persist(newProduct);
+        // Bu noktada newProduct MANAGED durumuna gecti
+        // Henuz DB'ye INSERT atilmamis olabilir (flush bekliyor)
+
+        // --- find(): ID ile bulur ---
+        Product found = entityManager.find(Product.class, 1L);
+        // found artik MANAGED. Degisiklikler otomatik kaydedilecek.
+
+        // --- JPQL Query ---
+        List&lt;Product&gt; expensive = entityManager
+            .createQuery("SELECT p FROM Product p WHERE p.price &gt; :min", Product.class)
+            .setParameter("min", new BigDecimal("100"))
+            .getResultList();
+
+        // --- remove(): Siler ---
+        Product toDelete = entityManager.find(Product.class, 99L);
+        if (toDelete != null) {
+            entityManager.remove(toDelete);
+            // Transaction bittiginde DELETE sorgusu calisir
+        }
+
+        // --- detach(): Persistence Context'ten cikarir ---
+        entityManager.detach(found);
+        // Artik found uzerindeki degisiklikler DB'ye YANSIMAZ
+
+        // --- merge(): Detached nesneyi tekrar Managed yapar ---
+        found.setName("Guncellenmis Isim");
+        Product mergedProduct = entityManager.merge(found);
+        // mergedProduct MANAGED, found hala DETACHED!
+        // Donen nesneyi kullanmak onemli.
+
+        // --- flush(): Bekleyen SQL'leri hemen DB'ye gonderir ---
+        entityManager.flush();
+        // Normalde transaction sonunda otomatik yapilir.
+        // flush() sadece siralamanin onemli oldugu durumlarda kullanilir.
+    }
+}</code></pre>
+
+  <div class="tip-box">
+    <strong>İpucu:</strong> <code>persist()</code> çağrıldığında nesne hemen veritabanına yazılmaz. SQL, <code>flush()</code> yapılana veya transaction commit edilene kadar bekletilir. Bu sayede Hibernate birden fazla işlemi toplu olarak (batch) gönderebilir.
+  </div>
+
+  <div class="concept-box">
+    <h4>EntityManager Temel Metotları</h4>
+    <p><strong>persist()</strong> &mdash; Yeni nesneyi Managed yapar (INSERT bekletir).<br>
+       <strong>find()</strong> &mdash; ID ile bulur, Managed döndürür.<br>
+       <strong>remove()</strong> &mdash; Managed nesneyi siler (DELETE bekletir).<br>
+       <strong>detach()</strong> &mdash; Nesneyi Persistence Context'ten çıkarır.<br>
+       <strong>merge()</strong> &mdash; Detached nesneyi tekrar Managed yapar ve <em>yeni bir Managed kopya döndürür</em>.<br>
+       <strong>flush()</strong> &mdash; Bekleyen tüm SQL'leri hemen veritabanına gönderir.</p>
+  </div>
+
+  <div class="warning-box">
+    <strong>Dikkat:</strong> <code>merge()</code> metodu orijinal nesneyi Managed yapmaz! Yeni bir Managed kopya döndürür. Her zaman dönen nesneyi kullanın: <code>Product merged = entityManager.merge(detachedProduct);</code>
+  </div>
+
+  <!-- Section 4 Quiz -->
+  <div class="quiz-container" data-section="4">
+    <h3 class="quiz-title">Bilgi Kontrolü</h3>
+
+    <div class="quiz-question" data-correct="B">
+      <p class="question-text">1. <code>entityManager.persist(product)</code> çağrıldığında ne olur?</p>
+      <div class="quiz-options">
+        <button class="quiz-option" data-value="A">A) Nesne hemen veritabanına INSERT edilir</button>
+        <button class="quiz-option" data-value="B">B) Nesne MANAGED durumuna geçer, INSERT flush/commit'e kadar bekletilir</button>
+        <button class="quiz-option" data-value="C">C) Nesne DETACHED durumuna geçer</button>
+      </div>
+      <div class="quiz-feedback correct-feedback">&#10003; Doğru! <code>persist()</code> nesneyi Persistence Context'e ekler (MANAGED yapar) ancak SQL hemen çalıştırılmaz. INSERT sorgusu <code>flush()</code> veya transaction commit anında gönderilir.</div>
+      <div class="quiz-feedback incorrect-feedback">&#10007; Yanlış. Doğru cevap B. <code>persist()</code> nesneyi MANAGED yapar ama SQL hemen çalışmaz; flush veya commit bekler.</div>
+    </div>
+
+    <div class="quiz-question" data-correct="C">
+      <p class="question-text">2. <code>merge()</code> metodu hakkında hangisi doğrudur?</p>
+      <div class="quiz-options">
+        <button class="quiz-option" data-value="A">A) Orijinal nesneyi doğrudan MANAGED yapar</button>
+        <button class="quiz-option" data-value="B">B) Nesneyi veritabanından siler</button>
+        <button class="quiz-option" data-value="C">C) Yeni bir MANAGED kopya döndürür, orijinal nesne DETACHED kalır</button>
+      </div>
+      <div class="quiz-feedback correct-feedback">&#10003; Doğru! <code>merge()</code> orijinal nesneyi değiştirmez. Yeni bir MANAGED kopya oluşturur ve onu döndürür. Bu yüzden dönen değeri kullanmak çok önemlidir.</div>
+      <div class="quiz-feedback incorrect-feedback">&#10007; Yanlış. Doğru cevap C. <code>merge()</code> yeni bir MANAGED kopya döndürür; orijinal nesne hala DETACHED'tır.</div>
+    </div>
+
+    <div class="quiz-question" data-correct="A">
+      <p class="question-text">3. Hibernate aşağıdakilerden hangisini yapmaz?</p>
+      <div class="quiz-options">
+        <button class="quiz-option" data-value="A">A) Frontend JavaScript kodunu derler</button>
+        <button class="quiz-option" data-value="B">B) JPQL sorgularını veritabanına özel SQL'e çevirir</button>
+        <button class="quiz-option" data-value="C">C) Entity değişikliklerini takip ederek otomatik UPDATE üretir</button>
+      </div>
+      <div class="quiz-feedback correct-feedback">&#10003; Doğru! Hibernate bir ORM çerçevesidir ve yalnızca Java nesneleri ile veritabanı arasındaki eşlemeyi yönetir. Frontend teknolojileriyle ilgilenmez.</div>
+      <div class="quiz-feedback incorrect-feedback">&#10007; Yanlış. Doğru cevap A. Hibernate yalnızca Java-veritabanı eşlemesi yapar; frontend ile ilgisi yoktur.</div>
+    </div>
+  </div>
+</section>
+
+<!-- Section 5: Persistence Context ve Entity Yaşam Döngüsü -->
+<section class="tutorial-section" id="section-5" data-section="5">
+  <h2 class="section-title"><span class="section-number">5</span> Persistence Context ve Entity Yaşam Döngüsü</h2>
+
+  <div class="concept-box">
+    <h4>Neden Bu Konu Çok Önemli?</h4>
+    <p>Bu konu, JPA (Hibernate) kullanan bir geliştiricinin "Junior"dan "Senior"a geçişindeki en kritik bilgidir. Persistence Context'i anlamadan yazılan kod, gereksiz sorgular üretir, beklenmedik hatalar verir ve performans sorunlarına yol açar.</p>
+  </div>
+
+  <h3>5.1 Persistence Context Nedir?</h3>
+
+  <p>Persistence Context, Java kodunuz ile veri tabanı arasında duran bir <strong>tampon bellek</strong> (buffer) ve <strong>değişiklik takipçisi</strong>dir.</p>
+
+  <div class="diagram-box">
+    <pre>
++--------------+     +-------------------------+     +--------------+
+|  Java Kodu   | &lt;-&gt; |  Persistence Context    | &lt;-&gt; |  Veri Tabani |
+|  (Uygulama)  |     |  (1. Seviye On Bellek)  |     |  (SQL DB)    |
++--------------+     +-------------------------+     +--------------+
+    </pre>
+  </div>
+
+  <div class="concept-box">
+    <h4>Persistence Context'in İki Temel Görevi</h4>
+    <p><strong>1. Dirty Checking:</strong> Nesnelerin değişip değişmediğini takip eder. Değişen nesneler için otomatik UPDATE sorgusu üretir.<br>
+       <strong>2. Kimlik Garantisi (Identity Map):</strong> Aynı ID'ye sahip veriyi aynı transaction içinde iki kez çekersen, DB'ye gitmez; hafızadaki aynı nesneyi döndürür.</p>
+  </div>
+
+  <h3>5.2 Entity'nin 4 Yaşam Evresi</h3>
+
+  <!-- Interactive Lifecycle Diagram -->
+  <div class="lifecycle-diagram">
+    <div class="lifecycle-state" data-state="transient" tabindex="0">
+      <div class="state-circle state-transient">TRANSIENT</div>
+      <div class="state-label">Yeni / Geçici</div>
+      <div class="state-description">
+        <p><code>new Product()</code> ile oluşturulmuş, henüz Persistence Context'e eklenmemiş nesne. Veritabanı bu nesneden habersizdir. Garbage Collector istediği zaman silebilir.</p>
+      </div>
+    </div>
+
+    <div class="lifecycle-arrow arrow-persist">
+      <span class="arrow-label">persist() / save()</span>
+      <span class="arrow-symbol">&rarr;</span>
+    </div>
+
+    <div class="lifecycle-state" data-state="managed" tabindex="0">
+      <div class="state-circle state-managed">MANAGED</div>
+      <div class="state-label">Yönetilen</div>
+      <div class="state-description">
+        <p>Persistence Context tarafından takip edilen nesne. <code>persist()</code>, <code>find()</code> veya JPQL sorgusuyla bu duruma geçer. Üzerinde yapılan tüm değişiklikler transaction sonunda otomatik olarak veritabanına yansır. <strong>Tüm sihir burada gerçekleşir!</strong></p>
+      </div>
+    </div>
+
+    <div class="lifecycle-arrows-branch">
+      <div class="lifecycle-arrow arrow-detach">
+        <span class="arrow-label">detach() / transaction kapanır</span>
+        <span class="arrow-symbol">&darr;</span>
+      </div>
+      <div class="lifecycle-arrow arrow-remove">
+        <span class="arrow-label">remove()</span>
+        <span class="arrow-symbol">&darr;</span>
+      </div>
+    </div>
+
+    <div class="lifecycle-bottom-states">
+      <div class="lifecycle-state" data-state="detached" tabindex="0">
+        <div class="state-circle state-detached">DETACHED</div>
+        <div class="state-label">Kopmuş</div>
+        <div class="state-description">
+          <p>Daha önce Managed olan ama artık Persistence Context'te olmayan nesne. <code>detach()</code> çağrısı veya transaction kapanmasıyla bu duruma geçer. Üzerindeki değişiklikler veritabanına <strong>yansımaz</strong>. <code>merge()</code> ile tekrar Managed yapılabilir.</p>
+        </div>
+      </div>
+
+      <div class="lifecycle-arrow arrow-merge">
+        <span class="arrow-label">merge()</span>
+        <span class="arrow-symbol">&uarr;</span>
+      </div>
+
+      <div class="lifecycle-state" data-state="removed" tabindex="0">
+        <div class="state-circle state-removed">REMOVED</div>
+        <div class="state-label">Silinmiş</div>
+        <div class="state-description">
+          <p><code>remove()</code> ile silinmek üzere işaretlenmiş nesne. Transaction commit edildiğinde veritabanından DELETE sorgusu ile kaldırılır.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="diagram-box">
+    <pre>
+    new Product()          persist() / save()
+  +-------------+       +-----------------+
+  |  TRANSIENT  | ----&gt; |    MANAGED      | &lt;---- find() / query
+  |  (Yeni)     |       |  (Yonetilen)    |
+  +-------------+       +--------+--------+
+                                 |
+                    +------------+------------+
+                    | detach()   | remove()   |
+                    v            v            |
+              +-----------+  +----------+    |
+              | DETACHED  |  | REMOVED  |    |
+              | (Kopmus)  |  | (Silinm.)|    |
+              +-----+-----+  +----------+    |
+                    |                         |
+                    +-- merge() --------------+
+    </pre>
+  </div>
+
+  <h4>A. TRANSIENT (Yeni / Geçici)</h4>
+
+  <pre><code class="language-java">Product product = new Product();
+product.setName("Laptop");
+// Su an TRANSIENT. DB bilmiyor, Hibernate bilmiyor.
+// Garbage Collector bu nesneyi istedigi zaman silebilir.</code></pre>
+
+  <h4>B. MANAGED (Yönetilen) &mdash; İşte Tüm Sihir Burada</h4>
+
+  <pre><code class="language-java">@Transactional
+public void managedExample() {
+    // Yol 1: persist ile Managed yapma
+    Product newProduct = new Product();
+    newProduct.setName("Tablet");
+    entityManager.persist(newProduct);  // Artik MANAGED
+
+    // Yol 2: find ile Managed yapma (en yaygin yol)
+    Product existing = entityManager.find(Product.class, 1L);  // MANAGED
+
+    // MANAGED nesne uzerindeki degisiklikler OTOMATIK kaydedilir:
+    existing.setPrice(new BigDecimal("999.99"));
+    // Burada save() veya update() cagrisi YOK!
+    // Transaction bittiginde Hibernate bunu kendi halleder.
+}</code></pre>
+
+  <div class="warning-box">
+    <strong>Önemli:</strong> MANAGED bir nesne üzerinde yapılan değişiklikler için <code>save()</code> veya <code>update()</code> çağrısı <strong>gerekmez</strong>. Transaction bittiğinde Hibernate, değişiklikleri otomatik olarak veritabanına yazar. Bu mekanizmaya <em>Dirty Checking</em> denir.
+  </div>
+
+  <h4>C. DETACHED (Kopmuş)</h4>
+
+  <pre><code class="language-java">@Transactional
+public Product getProduct(Long id) {
+    return productRepository.findById(id).orElseThrow();
+    // Metot bitip @Transactional kapaninca, donen nesne DETACHED olur.
+}
+
+// Controller'da:
+public void updatePrice() {
+    Product p = productService.getProduct(1L);
+    p.setPrice(new BigDecimal("500"));
+    // BU DEGISIKLIK VERI TABANINA YANSIMAZ!
+    // Cunku product artik DETACHED. Persistence Context kapandi.
+}</code></pre>
+
+  <div class="warning-box">
+    <strong>Sık Yapılan Hata:</strong> <code>@Transactional</code> metot bittiğinde dönen entity nesnesi DETACHED olur. Controller katmanında bu nesne üzerinde yapılan değişiklikler veritabanına <strong>yansımaz</strong>. Bu, özellikle yeni başlayanların en çok yaptığı hatalardan biridir.
+  </div>
+
+  <h4>D. REMOVED (Silinmiş)</h4>
+
+  <pre><code class="language-java">@Transactional
+public void deleteProduct(Long id) {
+    Product product = entityManager.find(Product.class, id);  // MANAGED
+    entityManager.remove(product);  // REMOVED
+    // Transaction bittiginde DELETE sorgusu calisir.
+}</code></pre>
+
+  <h3>5.3 Persistence Context'in Kimlik Garantisi</h3>
+
+  <div class="concept-box">
+    <h4>Identity Map Deseni</h4>
+    <p>Persistence Context, aynı transaction içinde aynı ID'ye sahip entity için her zaman <strong>aynı Java nesne referansını</strong> döndürür. Bu, sadece eşit değer (<code>equals</code>) değil, aynı referans (<code>==</code>) anlamına gelir. İkinci sorgu veritabanına gitmez; ön bellekten (cache) döner.</p>
+  </div>
+
+  <pre><code class="language-java">@Transactional
+public void identityMapDemo() {
+    // Ilk cagri: DB'ye SELECT sorgusu gider
+    Product p1 = productRepository.findById(1L).get();
+
+    // Ikinci cagri: DB'ye sorgu GITMEZ! Persistence Context'ten doner.
+    Product p2 = productRepository.findById(1L).get();
+
+    // Ayni nesne mi?
+    System.out.println(p1 == p2);  // true -- Sadece deger degil, referans da ayni!
+}</code></pre>
+
+  <div class="tip-box">
+    <strong>Performans Avantajı:</strong> Identity Map sayesinde aynı entity'yi bir transaction içinde kaç kez sorgularsanız sorgulayın, veritabanına yalnızca bir kez gidilir. Bu, özellikle karmaşık iş mantığı olan servislerde önemli bir performans kazancı sağlar.
+  </div>
+
+  <!-- Section 5 Quiz -->
+  <div class="quiz-container" data-section="5">
+    <h3 class="quiz-title">Bilgi Kontrolü</h3>
+
+    <div class="quiz-question" data-correct="C">
+      <p class="question-text">1. Aşağıdaki kodda <code>product</code> nesnesi hangi durumdadır?<br><code>Product product = new Product(); product.setName("Test");</code></p>
+      <div class="quiz-options">
+        <button class="quiz-option" data-value="A">A) MANAGED</button>
+        <button class="quiz-option" data-value="B">B) DETACHED</button>
+        <button class="quiz-option" data-value="C">C) TRANSIENT</button>
+      </div>
+      <div class="quiz-feedback correct-feedback">&#10003; Doğru! <code>new</code> ile oluşturulan ve henüz <code>persist()</code> veya <code>save()</code> ile Persistence Context'e eklenmemiş nesne TRANSIENT durumdadır. Veritabanı ve Hibernate bu nesneden habersizdir.</div>
+      <div class="quiz-feedback incorrect-feedback">&#10007; Yanlış. Doğru cevap C (TRANSIENT). <code>new</code> ile oluşturulan nesne henüz Persistence Context'e eklenmediği için TRANSIENT durumdadır.</div>
+    </div>
+
+    <div class="quiz-question" data-correct="A">
+      <p class="question-text">2. <code>@Transactional</code> bir metottan dönen entity nesnesi, metot dışında hangi duruma geçer?</p>
+      <div class="quiz-options">
+        <button class="quiz-option" data-value="A">A) DETACHED</button>
+        <button class="quiz-option" data-value="B">B) REMOVED</button>
+        <button class="quiz-option" data-value="C">C) MANAGED olarak kalır</button>
+      </div>
+      <div class="quiz-feedback correct-feedback">&#10003; Doğru! <code>@Transactional</code> metot bittiğinde Persistence Context kapanır ve tüm Managed nesneler DETACHED durumuna geçer. Bu nesneler üzerindeki değişiklikler artık veritabanına otomatik olarak yansımaz.</div>
+      <div class="quiz-feedback incorrect-feedback">&#10007; Yanlış. Doğru cevap A (DETACHED). Transaction kapandığında Persistence Context da kapanır ve nesneler DETACHED olur.</div>
+    </div>
+
+    <div class="quiz-question" data-correct="B">
+      <p class="question-text">3. Aynı transaction içinde <code>findById(1L)</code> iki kez çağrılırsa ne olur?</p>
+      <div class="quiz-options">
+        <button class="quiz-option" data-value="A">A) Veritabanına iki ayrı SELECT sorgusu gönderilir</button>
+        <button class="quiz-option" data-value="B">B) Yalnızca bir SELECT gönderilir, ikisi de aynı nesne referansını döndürür (p1 == p2 true)</button>
+        <button class="quiz-option" data-value="C">C) İki ayrı SELECT gönderilir ve iki farklı nesne döndürülür</button>
+      </div>
+      <div class="quiz-feedback correct-feedback">&#10003; Doğru! Persistence Context'in Identity Map özelliği sayesinde aynı ID ile yapılan ikinci sorgu veritabanına gitmez. Ön bellekteki aynı nesne referansı döndürülür.</div>
+      <div class="quiz-feedback incorrect-feedback">&#10007; Yanlış. Doğru cevap B. Persistence Context, Identity Map deseni ile aynı ID'li entity için tek bir SELECT yapar ve aynı referansı döndürür.</div>
+    </div>
+  </div>
+</section>
+
+<!-- Section 6: Dirty Checking Mekanizması -->
+<section class="tutorial-section" id="section-6" data-section="6">
+  <h2 class="section-title"><span class="section-number">6</span> Dirty Checking Mekanizması</h2>
+
+  <div class="concept-box">
+    <h4>Dirty Checking Nedir?</h4>
+    <p>Dirty Checking, Hibernate'in MANAGED durumdaki entity nesnelerinin değişip değişmediğini otomatik olarak takip etmesi ve değişen ("kirli" &mdash; dirty) nesneler için otomatik UPDATE sorgusu üretmesidir. Bu mekanizma sayesinde geliştirici <code>save()</code> veya <code>update()</code> çağrısı yapmak zorunda kalmaz.</p>
+  </div>
+
+  <h3>6.1 Nasıl Çalışır?</h3>
+
+  <table class="info-table">
+    <thead>
+      <tr>
+        <th>Adım</th>
+        <th>Açıklama</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>1</td>
+        <td><code>findById(1)</code> çağrılır &rarr; Hibernate DB'den veriyi çeker, Java nesnesi oluşturur</td>
+      </tr>
+      <tr>
+        <td>2</td>
+        <td>Bu nesneyi Persistence Context'e koyar</td>
+      </tr>
+      <tr>
+        <td>3</td>
+        <td><strong>Gizli İşlem:</strong> Nesnenin o anki halinin bir <strong>kopyasını (snapshot)</strong> alır</td>
+      </tr>
+      <tr>
+        <td>4</td>
+        <td>Transaction biterken, mevcut nesneyi snapshot ile <strong>karşılaştırır</strong></td>
+      </tr>
+      <tr>
+        <td>5</td>
+        <td>Farklılık varsa (nesne "kirli" &mdash; dirty), otomatik <code>UPDATE</code> SQL'i oluşturur ve çalıştırır</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="diagram-box">
+    <pre>
+  findById(1L) cagrilir
+        |
+        v
+  +----------------------------------------------+
+  |         Persistence Context                   |
+  |                                               |
+  |  Nesne:    { name: "Laptop", price: 1500 }    |
+  |  Snapshot: { name: "Laptop", price: 1000 }    |
+  |                                               |
+  |  Karsilastirma: price FARKLI!                 |
+  |  =&gt; UPDATE products SET price=1500            |
+  |     WHERE id=1                                |
+  +----------------------------------------------+
+    </pre>
+  </div>
+
+  <h3>6.2 Kod Üzerinde Gösterim</h3>
+
+  <pre><code class="language-java">@Service
+public class ProductService {
+
+    @Autowired
+    private ProductRepository productRepository;
+
+    @Transactional
+    public void updateProductPrice(Long id, BigDecimal newPrice) {
+
+        // Adim 1: DB'den oku -> Nesne MANAGED oldu
+        // Adim 2: Hibernate arka planda snapshot aldi:
+        //         snapshot = { name: "Laptop", price: 1000.00, ... }
+        Product product = productRepository.findById(id).orElseThrow();
+
+        // Adim 3: Sadece Java nesnesinin degerini degistir
+        product.setPrice(newPrice);
+
+        // Adim 4: Metot biter, @Transactional kapanir
+        // Hibernate karsilastirir:
+        //   mevcut  = { name: "Laptop", price: 1500.00, ... }
+        //   snapshot = { name: "Laptop", price: 1000.00, ... }
+        //   FARK VAR! -> UPDATE products SET price = 1500.00 WHERE id = ?
+
+        // DIKKAT: productRepository.save(product) YAZILMAZ!
+        // Cunku nesne zaten MANAGED. save() gereksiz islem yapar.
+    }
+}</code></pre>
+
+  <div class="tip-box">
+    <strong>Neden <code>save()</code> Gereksiz?</strong> Nesne zaten MANAGED durumda olduğu için Hibernate değişiklikleri snapshot mekanizması ile otomatik algılar. Ekstra <code>save()</code> çağrısı yapmak, Spring Data'nın arka planda gereksiz kontroller yapmasına neden olur (ID var mı? &rarr; <code>merge()</code> çağırır &rarr; ama zaten Managed...) ve boşuna CPU döngüsü harcanır.
+  </div>
+
+  <h3>6.3 save() Çağrısının Gereksiz Olduğu Durumlar</h3>
+
+  <pre><code class="language-java">// YANLIS -- Gereksiz save() cagrisi
+@Transactional
+public void badExample(Long id) {
+    Product product = productRepository.findById(id).orElseThrow();
+    product.setName("Yeni Isim");
+    productRepository.save(product);  // GEREKSIZ! Zaten Managed.
+    // Spring Data arka planda:
+    // 1. "Bu nesnenin ID'si var mi?" -> Evet
+    // 2. "O zaman merge() cagirayim" -> Ama zaten Managed...
+    // 3. Bosuna CPU dongusu harcandi.
+}</code></pre>
+
+  <pre><code class="language-java">// DOGRU -- Temiz ve verimli
+@Transactional
+public void goodExample(Long id) {
+    Product product = productRepository.findById(id).orElseThrow();
+    product.setName("Yeni Isim");
+    // Bitti. Hibernate halleder.
+}</code></pre>
+
+  <div class="warning-box">
+    <strong>Kural:</strong> Eğer bir entity'yi <code>findById()</code>, <code>find()</code> veya herhangi bir sorgu ile aldıysanız ve <code>@Transactional</code> bir metot içindeyseniz, değişikliklerden sonra <code>save()</code> çağırmayın. Bu gereksiz bir işlemdir ve kodun okunabilirliğini azaltır. <code>save()</code> yalnızca yeni (TRANSIENT) nesneler için kullanılmalıdır.
+  </div>
+
+  <div class="concept-box">
+    <h4>Özet: Dirty Checking İş Akışı</h4>
+    <p><strong>1.</strong> Entity, <code>find()</code> veya sorgu ile okunur &rarr; MANAGED olur.<br>
+       <strong>2.</strong> Hibernate, nesnenin anlık görüntüsünü (snapshot) kaydeder.<br>
+       <strong>3.</strong> Geliştirici, setter metotları ile nesneyi değiştirir.<br>
+       <strong>4.</strong> Transaction commit olurken Hibernate, mevcut nesneyi snapshot ile karşılaştırır.<br>
+       <strong>5.</strong> Fark varsa otomatik <code>UPDATE</code> SQL'i üretilir ve çalıştırılır.<br>
+       <strong>6.</strong> Fark yoksa hiçbir SQL üretilmez &mdash; performans kazanımı!</p>
+  </div>
+
+  <!-- Section 6 Quiz -->
+  <div class="quiz-container" data-section="6">
+    <h3 class="quiz-title">Bilgi Kontrolü</h3>
+
+    <div class="quiz-question" data-correct="B">
+      <p class="question-text">1. Dirty Checking mekanizmasında Hibernate, değişiklikleri nasıl tespit eder?</p>
+      <div class="quiz-options">
+        <button class="quiz-option" data-value="A">A) Setter metotlarını proxy ile dinleyerek</button>
+        <button class="quiz-option" data-value="B">B) Entity okunduğunda alınan snapshot ile transaction sonunda karşılaştırarak</button>
+        <button class="quiz-option" data-value="C">C) Veritabanına SELECT atarak mevcut değerleri kontrol ederek</button>
+      </div>
+      <div class="quiz-feedback correct-feedback">&#10003; Doğru! Hibernate, entity Persistence Context'e girdiğinde bir snapshot (anlık görüntü) alır. Transaction commit olurken nesnenin mevcut halini bu snapshot ile karşılaştırır. Fark varsa UPDATE üretir.</div>
+      <div class="quiz-feedback incorrect-feedback">&#10007; Yanlış. Doğru cevap B. Hibernate, snapshot mekanizmasını kullanır: entity okunduğunda kopya alır ve transaction sonunda karşılaştırma yapar.</div>
+    </div>
+
+    <div class="quiz-question" data-correct="A">
+      <p class="question-text">2. Aşağıdaki kodda <code>save()</code> çağrısı neden gereksizdir?<br><code>Product p = repo.findById(1L).get(); p.setName("X"); repo.save(p);</code></p>
+      <div class="quiz-options">
+        <button class="quiz-option" data-value="A">A) Nesne zaten MANAGED olduğu için Dirty Checking değişikliği otomatik kaydeder</button>
+        <button class="quiz-option" data-value="B">B) <code>setName()</code> çağrısı doğrudan SQL çalıştırır</button>
+        <button class="quiz-option" data-value="C">C) <code>findById()</code> nesneyi DETACHED olarak döndürür</button>
+      </div>
+      <div class="quiz-feedback correct-feedback">&#10003; Doğru! <code>findById()</code> ile alınan nesne MANAGED durumdadır. <code>@Transactional</code> metot içinde yapılan değişiklikler, Dirty Checking sayesinde transaction sonunda otomatik olarak veritabanına yansır. <code>save()</code> gereksiz bir <code>merge()</code> çağrısına neden olur.</div>
+      <div class="quiz-feedback incorrect-feedback">&#10007; Yanlış. Doğru cevap A. <code>findById()</code> nesneyi MANAGED yapar ve Dirty Checking, değişiklikleri otomatik kaydeder. <code>save()</code> gereksizdir.</div>
+    </div>
+
+    <div class="quiz-question" data-correct="C">
+      <p class="question-text">3. Dirty Checking sonucunda nesne değişmediyse ne olur?</p>
+      <div class="quiz-options">
+        <button class="quiz-option" data-value="A">A) Boş bir UPDATE sorgusu gönderilir</button>
+        <button class="quiz-option" data-value="B">B) Hata fırlatılır</button>
+        <button class="quiz-option" data-value="C">C) Hiçbir SQL üretilmez, performans kazanılır</button>
+      </div>
+      <div class="quiz-feedback correct-feedback">&#10003; Doğru! Eğer nesnenin mevcut hali snapshot ile aynıysa, Hibernate hiçbir UPDATE sorgusu üretmez. Bu, gereksiz veritabanı yazımlarının önüne geçer ve performans avantajı sağlar.</div>
+      <div class="quiz-feedback incorrect-feedback">&#10007; Yanlış. Doğru cevap C. Nesne değişmediyse snapshot ile aynıdır ve Hibernate hiçbir SQL üretmez.</div>
+    </div>
+  </div>
+</section>

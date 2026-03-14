@@ -1,0 +1,629 @@
+<!-- Section 7: Spring Data JPA -->
+<section class="tutorial-section" id="section-7" data-section="7">
+  <h2 class="section-title"><span class="section-number">7</span> Spring Data JPA &mdash; &Uuml;st D&uuml;zey Soyutlama</h2>
+
+  <p>Spring Data JPA, Hibernate ve JPA &uuml;zerine kurulu bir soyutlama katmanıdır. Repository aray&uuml;zleri tanımlayarak, hi&ccedil; SQL yazmadan CRUD işlemleri yapmanızı sağlar.</p>
+
+  <div class="concept-box">
+    <h4>Repository Pattern</h4>
+    <p>Spring Data JPA, repository aray&uuml;zleri &uuml;zerinden veri erişimini soyutlar. <code>JpaRepository</code> aray&uuml;z&uuml;n&uuml; extend ederek, hi&ccedil;bir implementasyon yazmadan temel CRUD işlemlerini ve daha fazlasını elde edersiniz. Spring Data, metot adlarından otomatik olarak SQL &uuml;retir.</p>
+  </div>
+
+  <h3>7.1 Temel Repository Tanımı</h3>
+
+<pre><code class="language-java">import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.repository.query.Param;
+
+public interface ProductRepository extends JpaRepository&lt;Product, Long&gt; {
+
+    // ─── Turetilmis Sorgular (Derived Queries) ───
+    // Spring Data metot adindan SQL uretir
+
+    // SELECT * FROM products WHERE category = ?
+    List&lt;Product&gt; findByCategory(String category);
+
+    // SELECT * FROM products WHERE category = ? AND status = ?
+    // DIKKAT: En fazla 2 parametre! Daha fazlasi okunaksiz olur.
+    List&lt;Product&gt; findByCategoryAndStatus(String category, ProductStatus status);
+
+    // SELECT * FROM products WHERE price BETWEEN ? AND ?
+    List&lt;Product&gt; findByPriceBetween(BigDecimal min, BigDecimal max);
+
+    // SELECT * FROM products WHERE name LIKE '%keyword%'
+    List&lt;Product&gt; findByNameContainingIgnoreCase(String keyword);
+
+    // ─── JPQL ile Ozel Sorgular ───
+    @Query("SELECT p FROM Product p WHERE p.price &gt; :minPrice ORDER BY p.price DESC")
+    List&lt;Product&gt; findExpensiveProducts(@Param("minPrice") BigDecimal minPrice);
+
+    // ─── DTO Projection (Sadece gerekli alanlari cek) ───
+    @Query("SELECT new com.example.dto.ProductSummary(p.name, p.price) " +
+           "FROM Product p WHERE p.category = :category")
+    List&lt;ProductSummary&gt; findSummaryByCategory(@Param("category") String category);
+
+    // ─── Native SQL (Veri tabanina ozel fonksiyonlar gerektiginde) ───
+    @Query(value = "SELECT * FROM products WHERE is_active = true " +
+                   "ORDER BY created_at DESC LIMIT 10",
+           nativeQuery = true)
+    List&lt;Product&gt; findTop10ActiveProducts();
+
+    // ─── Toplu Guncelleme (Bulk Update) ───
+    @Modifying
+    @Query("UPDATE Product p SET p.price = p.price * :multiplier WHERE p.category = :cat")
+    int bulkUpdatePrices(@Param("cat") String category, @Param("multiplier") double multiplier);
+}</code></pre>
+
+  <div class="tip-box">
+    <strong>İpucu:</strong> T&uuml;retilmiş sorgularda (Derived Queries) en fazla 2 parametre kullanın. Daha fazlası metot adını okunaksız hale getirir. Karmaşık sorgular i&ccedil;in <code>@Query</code> anotasyonunu tercih edin.
+  </div>
+
+  <h3>7.2 Servis Katmanı Kullanımı</h3>
+
+<pre><code class="language-java">@Service
+public class ProductService {
+
+    @Autowired
+    private ProductRepository productRepository;
+
+    // Yeni urun olustur
+    @Transactional
+    public Product createProduct(ProductCreateDTO dto) {
+        Product product = new Product();
+        product.setName(dto.getName());
+        product.setPrice(dto.getPrice());
+        product.setCategory(dto.getCategory());
+        product.setStatus(ProductStatus.ACTIVE);
+        product.setCreatedAt(LocalDateTime.now());
+        return productRepository.save(product);
+        // Burada save() ZORUNLU cunku nesne yeni (Transient).
+        // save() onu Managed yapar ve ID atar.
+    }
+
+    // Mevcut urunu guncelle
+    @Transactional
+    public void updateProduct(Long id, ProductUpdateDTO dto) {
+        Product product = productRepository.findById(id).orElseThrow();
+        product.setName(dto.getName());
+        product.setPrice(dto.getPrice());
+        // save() YOK! Nesne Managed, Dirty Checking yapacak.
+    }
+
+    // Silme
+    @Transactional
+    public void deleteProduct(Long id) {
+        Product product = productRepository.findById(id).orElseThrow();
+        productRepository.delete(product);
+    }
+
+    // Salt okunur sorgu (Read-Only) — Performans optimizasyonu
+    @Transactional(readOnly = true)
+    public List&lt;Product&gt; getExpensiveProducts(BigDecimal minPrice) {
+        return productRepository.findExpensiveProducts(minPrice);
+        // readOnly = true: Hibernate snapshot ALMAZ → Bellek tasarrufu
+        // Dirty Checking YAPILMAZ → CPU tasarrufu
+    }
+}</code></pre>
+
+  <div class="warning-box">
+    <strong>Dikkat:</strong> Yeni bir nesne (Transient) oluştururken <code>save()</code> &ccedil;ağırmak zorunludur. Ancak <code>findById()</code> ile &ccedil;ekilen bir nesne zaten <strong>Managed</strong> durumundadır ve &uuml;zerindeki değişiklikler Dirty Checking ile otomatik olarak veritabanına yansır &mdash; <code>save()</code> gerekmez.
+  </div>
+
+  <div class="concept-box">
+    <h4>readOnly = true Optimizasyonu</h4>
+    <p><code>@Transactional(readOnly = true)</code> kullanıldığında Hibernate, entity'lerin snapshot kopyasını almaz. Bu, hem bellek tasarrufu sağlar hem de Dirty Checking yapılmadığı i&ccedil;in CPU tasarrufu sağlar. Salt okunur sorgularda mutlaka kullanılmalıdır.</p>
+  </div>
+
+  <div class="quiz-container" data-section="7">
+    <h3 class="quiz-title">Bilgi Kontrol&uuml;</h3>
+    <div class="quiz-question" data-correct="B">
+      <p class="question-text">1. Spring Data JPA'da <code>findById()</code> ile &ccedil;ekilen bir entity &uuml;zerinde değişiklik yaptıktan sonra ne yapmalısınız?</p>
+      <div class="quiz-options">
+        <button class="quiz-option" data-value="A">A) <code>save()</code> &ccedil;ağırmalısınız</button>
+        <button class="quiz-option" data-value="B">B) Hi&ccedil;bir şey yapmanıza gerek yok, Dirty Checking otomatik kaydeder</button>
+        <button class="quiz-option" data-value="C">C) <code>flush()</code> &ccedil;ağırmalısınız</button>
+      </div>
+      <div class="quiz-feedback correct-feedback">&check; Doğru! Managed durumdaki entity&rsquo;ler &uuml;zerindeki değişiklikler Dirty Checking mekanizması ile otomatik olarak veritabanına yansır.</div>
+      <div class="quiz-feedback incorrect-feedback">&cross; Yanlış. Doğru cevap B. <code>findById()</code> ile &ccedil;ekilen entity Managed durumdadır ve Dirty Checking sayesinde değişiklikler otomatik kaydedilir.</div>
+    </div>
+    <div class="quiz-question" data-correct="C">
+      <p class="question-text">2. T&uuml;retilmiş sorgularda (Derived Queries) en fazla ka&ccedil; parametre kullanılması &ouml;nerilir?</p>
+      <div class="quiz-options">
+        <button class="quiz-option" data-value="A">A) 1</button>
+        <button class="quiz-option" data-value="B">B) 3</button>
+        <button class="quiz-option" data-value="C">C) 2</button>
+      </div>
+      <div class="quiz-feedback correct-feedback">&check; Doğru! En fazla 2 parametre kullanılmalı, daha fazlası metot adını okunaksız yapar. Karmaşık sorgular i&ccedil;in <code>@Query</code> tercih edilmelidir.</div>
+      <div class="quiz-feedback incorrect-feedback">&cross; Yanlış. Doğru cevap C (2). Daha fazla parametre metot adını okunaksız hale getirir; bunun yerine <code>@Query</code> kullanılmalıdır.</div>
+    </div>
+    <div class="quiz-question" data-correct="A">
+      <p class="question-text">3. <code>@Transactional(readOnly = true)</code> kullanmanın avantajı nedir?</p>
+      <div class="quiz-options">
+        <button class="quiz-option" data-value="A">A) Hibernate snapshot almaz ve Dirty Checking yapmaz, b&ouml;ylece bellek ve CPU tasarrufu sağlar</button>
+        <button class="quiz-option" data-value="B">B) Sorguları paralel &ccedil;alıştırır</button>
+        <button class="quiz-option" data-value="C">C) Veritabanı bağlantısı a&ccedil;maz</button>
+      </div>
+      <div class="quiz-feedback correct-feedback">&check; Doğru! readOnly modunda Hibernate, entity snapshot'ları almaz ve Dirty Checking yapmaz. Bu hem bellek hem CPU tasarrufu sağlar.</div>
+      <div class="quiz-feedback incorrect-feedback">&cross; Yanlış. Doğru cevap A. readOnly = true olduğunda Hibernate snapshot almaz ve Dirty Checking yapmaz, bu da bellek ve CPU tasarrufu sağlar.</div>
+    </div>
+  </div>
+</section>
+
+<!-- Section 8: Spring Data JDBC -->
+<section class="tutorial-section" id="section-8" data-section="8">
+  <h2 class="section-title"><span class="section-number">8</span> Spring Data JDBC &mdash; Sihirsiz Yaklaşım</h2>
+
+  <p>Spring Data JDBC, Hibernate kullanmaz. JDBC&rsquo;yi doğrudan kullanır. Persistence Context, Lazy Loading, Dirty Checking gibi &ldquo;sihirli&rdquo; mekanizmalar yoktur. Domain Driven Design (DDD) yaklaşımına daha uygundur.</p>
+
+  <div class="concept-box">
+    <h4>Spring Data JDBC Felsefesi</h4>
+    <p>Spring Data JDBC, &ldquo;a&ccedil;ık ve net&rdquo; bir yaklaşım benimser. Arka planda sihirli davranışlar yoktur. Her değişikliği a&ccedil;ık&ccedil;a <code>save()</code> ile kaydetmeniz gerekir. Bu, kodu daha &ouml;ng&ouml;r&uuml;lebilir kılar ve Domain Driven Design (DDD) prensiplerine daha uygun bir yapı sunar.</p>
+  </div>
+
+  <h3>8.1 Temel Farklar</h3>
+
+  <table class="info-table">
+    <thead>
+      <tr>
+        <th>&Ouml;zellik</th>
+        <th>Spring Data JPA</th>
+        <th>Spring Data JDBC</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>ORM Motoru</td>
+        <td>Hibernate</td>
+        <td>Yok (Doğrudan JDBC)</td>
+      </tr>
+      <tr>
+        <td>Persistence Context</td>
+        <td>Var</td>
+        <td>Yok</td>
+      </tr>
+      <tr>
+        <td>Dirty Checking</td>
+        <td>Var (Otomatik UPDATE)</td>
+        <td>Yok</td>
+      </tr>
+      <tr>
+        <td>Lazy Loading</td>
+        <td>Var</td>
+        <td>Yok</td>
+      </tr>
+      <tr>
+        <td>save() Zorunluluğu</td>
+        <td>Managed ise gereksiz</td>
+        <td>HER ZAMAN zorunlu</td>
+      </tr>
+      <tr>
+        <td>Karmaşıklık</td>
+        <td>Y&uuml;ksek (sihir &ccedil;ok)</td>
+        <td>D&uuml;ş&uuml;k (a&ccedil;ık ve net)</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>8.2 Aggregate Root Modeli</h3>
+
+<pre><code class="language-java">// Spring Data JDBC — Entity yerine "Aggregate" kullanilir
+import org.springframework.data.annotation.Id;
+import org.springframework.data.relational.core.mapping.MappedCollection;
+import org.springframework.data.relational.core.mapping.Table;
+
+@Table("orders")
+public class Order {
+
+    @Id
+    private Long id;
+    private String status;
+    private LocalDateTime createdAt;
+
+    // Aggregate icindeki alt nesneler
+    // Order kaydedildiginde Items da otomatik kaydedilir/silinir
+    @MappedCollection(idColumn = "order_id")
+    private Set&lt;OrderItem&gt; items = new HashSet&lt;&gt;();
+
+    // Is mantigi metotlari dogrudan Entity'de
+    public void addItem(Long productId, int quantity, BigDecimal price) {
+        items.add(new OrderItem(productId, quantity, price));
+    }
+
+    public BigDecimal getTotalAmount() {
+        return items.stream()
+            .map(item -&gt; item.getUnitPrice().multiply(BigDecimal.valueOf(item.getQuantity())))
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+}</code></pre>
+
+  <div class="concept-box">
+    <h4>Aggregate Root</h4>
+    <p>Spring Data JDBC, DDD'nin Aggregate Root konseptini uygular. Bir Aggregate Root (ör. <code>Order</code>) kaydedildiğinde, i&ccedil;indeki alt nesneler (ör. <code>OrderItem</code>) de otomatik olarak kaydedilir veya silinir. İş mantığı metotları doğrudan entity sınıfının i&ccedil;inde tanımlanır.</p>
+  </div>
+
+  <h3>8.3 Kullanımı</h3>
+
+<pre><code class="language-java">@Service
+public class OrderService {
+
+    @Autowired
+    private OrderRepository orderRepository;
+
+    @Transactional
+    public void updateOrderStatus(Long orderId, String newStatus) {
+        Order order = orderRepository.findById(orderId).orElseThrow();
+
+        order.setStatus(newStatus);
+
+        // !! Spring Data JDBC'de save() ZORUNLU !!
+        // Dirty Checking yok. Acikca kaydetmezseniz degisiklik kaybolur.
+        orderRepository.save(order);
+    }
+}</code></pre>
+
+  <div class="warning-box">
+    <strong>Dikkat:</strong> Spring Data JDBC&rsquo;de Dirty Checking mekanizması yoktur. Entity &uuml;zerinde yaptığınız her değişikliği <code>save()</code> ile a&ccedil;ık&ccedil;a kaydetmelisiniz. Aksi takdirde değişiklikleriniz kaybolur!
+  </div>
+
+  <div class="quiz-container" data-section="8">
+    <h3 class="quiz-title">Bilgi Kontrol&uuml;</h3>
+    <div class="quiz-question" data-correct="C">
+      <p class="question-text">1. Spring Data JDBC ile Spring Data JPA arasındaki en temel fark nedir?</p>
+      <div class="quiz-options">
+        <button class="quiz-option" data-value="A">A) Spring Data JDBC daha hızlıdır</button>
+        <button class="quiz-option" data-value="B">B) Spring Data JDBC sadece PostgreSQL destekler</button>
+        <button class="quiz-option" data-value="C">C) Spring Data JDBC'de Persistence Context, Dirty Checking ve Lazy Loading yoktur</button>
+      </div>
+      <div class="quiz-feedback correct-feedback">&check; Doğru! Spring Data JDBC, Hibernate kullanmaz ve bu y&uuml;zden Persistence Context, Dirty Checking, Lazy Loading gibi mekanizmalar bulunmaz.</div>
+      <div class="quiz-feedback incorrect-feedback">&cross; Yanlış. Doğru cevap C. Spring Data JDBC'de Hibernate'in &ldquo;sihirli&rdquo; mekanizmaları (Persistence Context, Dirty Checking, Lazy Loading) yoktur.</div>
+    </div>
+    <div class="quiz-question" data-correct="A">
+      <p class="question-text">2. Spring Data JDBC'de bir entity&rsquo;yi g&uuml;ncelledikten sonra ne yapmalısınız?</p>
+      <div class="quiz-options">
+        <button class="quiz-option" data-value="A">A) <code>save()</code> &ccedil;ağırmalısınız</button>
+        <button class="quiz-option" data-value="B">B) Hi&ccedil;bir şey yapmanıza gerek yok</button>
+        <button class="quiz-option" data-value="C">C) <code>flush()</code> &ccedil;ağırmalısınız</button>
+      </div>
+      <div class="quiz-feedback correct-feedback">&check; Doğru! Spring Data JDBC'de Dirty Checking olmadığı i&ccedil;in her değişiklikte <code>save()</code> &ccedil;ağırmak zorunludur.</div>
+      <div class="quiz-feedback incorrect-feedback">&cross; Yanlış. Doğru cevap A. Spring Data JDBC'de Dirty Checking yoktur, bu nedenle <code>save()</code> &ccedil;ağırmak zorunludur.</div>
+    </div>
+    <div class="quiz-question" data-correct="B">
+      <p class="question-text">3. Spring Data JDBC hangi tasarım yaklaşımına daha uygundur?</p>
+      <div class="quiz-options">
+        <button class="quiz-option" data-value="A">A) MVC (Model-View-Controller)</button>
+        <button class="quiz-option" data-value="B">B) DDD (Domain Driven Design)</button>
+        <button class="quiz-option" data-value="C">C) CQRS (Command Query Responsibility Segregation)</button>
+      </div>
+      <div class="quiz-feedback correct-feedback">&check; Doğru! Spring Data JDBC, Aggregate Root konseptiyle DDD yaklaşımına doğal olarak uygundur.</div>
+      <div class="quiz-feedback incorrect-feedback">&cross; Yanlış. Doğru cevap B. Spring Data JDBC, Aggregate Root modeli ile DDD (Domain Driven Design) yaklaşımına daha uygundur.</div>
+    </div>
+  </div>
+</section>
+
+<!-- Section 9: jOOQ -->
+<section class="tutorial-section" id="section-9" data-section="9">
+  <h2 class="section-title"><span class="section-number">9</span> jOOQ &mdash; SQL Odaklı Tip G&uuml;venli Sorgular</h2>
+
+  <p>jOOQ (Java Object Oriented Querying) bir ORM değildir. SQL yazmayı sevenler i&ccedil;in, SQL&rsquo;i Java kodu i&ccedil;inde <strong>tip g&uuml;venli (type-safe)</strong> olarak yazmayı sağlar.</p>
+
+  <div class="concept-box">
+    <h4>jOOQ Nedir?</h4>
+    <p>jOOQ, veritabanı şemanızdan Java sınıfları &uuml;retir ve SQL sorgularını Java kodu olarak yazmanızı sağlar. Tablo yapısı değiştiğinde kodunuz <strong>derleme aşamasında</strong> hata verir (compile-time safety). Hibernate&rsquo;den farklı olarak, yazdığınız SQL tam olarak ne &uuml;retiyorsa o &ccedil;alışır.</p>
+  </div>
+
+  <h3>9.1 Neden jOOQ?</h3>
+
+  <ul>
+    <li>Hibernate karmaşık sorgularda (&ccedil;oklu JOIN, alt sorgu, pencere fonksiyonları) zorlanır</li>
+    <li>Hibernate&rsquo;in &uuml;rettiği SQL&rsquo;i kontrol edemezsiniz</li>
+    <li>jOOQ&rsquo;da yazdığınız SQL tam olarak ne &uuml;retiyorsa o &ccedil;alışır</li>
+    <li>Tablo yapısı değişirse, kodunuz <strong>derleme aşamasında</strong> hata verir (compile-time safety)</li>
+  </ul>
+
+  <h3>9.2 jOOQ ile Karmaşık Sorgu</h3>
+
+<pre><code class="language-java">@Service
+public class ReportService {
+
+    @Autowired
+    private DSLContext dsl;  // jOOQ'nun ana nesnesi
+
+    public List&lt;SalesSummary&gt; getSalesSummary(int year) {
+        return dsl
+            .select(
+                USERS.FIRST_NAME,
+                USERS.LAST_NAME,
+                sum(ORDERS.TOTAL_AMOUNT).as("total_sales"),
+                count(ORDERS.ID).as("order_count")
+            )
+            .from(USERS)
+            .join(ORDERS).on(USERS.ID.eq(ORDERS.USER_ID))
+            .where(
+                extract(ORDERS.ORDER_DATE, DatePart.YEAR).eq(year)
+                .and(ORDERS.STATUS.eq("COMPLETED"))
+            )
+            .groupBy(USERS.ID, USERS.FIRST_NAME, USERS.LAST_NAME)
+            .having(sum(ORDERS.TOTAL_AMOUNT).gt(BigDecimal.valueOf(1000)))
+            .orderBy(sum(ORDERS.TOTAL_AMOUNT).desc())
+            .fetchInto(SalesSummary.class);
+    }
+
+    // Pencere fonksiyonu (Window Function) — Hibernate ile yapmak cok zor
+    public List&lt;RankedProduct&gt; getTopProductsByCategory() {
+        return dsl
+            .select(
+                PRODUCTS.NAME,
+                PRODUCTS.CATEGORY,
+                PRODUCTS.PRICE,
+                rowNumber()
+                    .over(partitionBy(PRODUCTS.CATEGORY).orderBy(PRODUCTS.PRICE.desc()))
+                    .as("rank")
+            )
+            .from(PRODUCTS)
+            .fetchInto(RankedProduct.class);
+    }
+}</code></pre>
+
+  <div class="tip-box">
+    <strong>İpucu:</strong> jOOQ, pencere fonksiyonları (ROW_NUMBER, RANK, DENSE_RANK), CTE&rsquo;ler ve karmaşık alt sorgular gibi ileri d&uuml;zey SQL &ouml;zelliklerini doğal ve tip g&uuml;venli bir şekilde destekler. Bu t&uuml;r sorguları Hibernate/JPQL ile yazmak &ccedil;ok zordur.
+  </div>
+
+  <h3>9.3 Ne Zaman Hibernate, Ne Zaman jOOQ?</h3>
+
+  <table class="info-table">
+    <thead>
+      <tr>
+        <th>Senaryo</th>
+        <th>Ara&ccedil;</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Basit CRUD (Oluştur, Oku, G&uuml;ncelle, Sil)</td>
+        <td>Hibernate / Spring Data JPA</td>
+      </tr>
+      <tr>
+        <td>Tekil kayıt g&uuml;ncelleme</td>
+        <td>Hibernate (Dirty Checking)</td>
+      </tr>
+      <tr>
+        <td>Karmaşık raporlar, dashboard verileri</td>
+        <td><strong>jOOQ</strong></td>
+      </tr>
+      <tr>
+        <td>&Ccedil;oklu JOIN + alt sorgu + gruplama</td>
+        <td><strong>jOOQ</strong></td>
+      </tr>
+      <tr>
+        <td>Pencere fonksiyonları (ROW_NUMBER, RANK)</td>
+        <td><strong>jOOQ</strong></td>
+      </tr>
+      <tr>
+        <td>Toplu veri g&uuml;ncelleme (Bulk Update)</td>
+        <td>jOOQ veya @Modifying JPQL</td>
+      </tr>
+      <tr>
+        <td>İlişki y&ouml;netimi (Cascade, Lazy Loading)</td>
+        <td>Hibernate</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="comparison-box">
+    <h4>Hibernate vs jOOQ Karşılaştırması</h4>
+    <div style="display: flex; gap: 20px;">
+      <div style="flex: 1;">
+        <h5>Hibernate / Spring Data JPA</h5>
+        <ul>
+          <li>Basit CRUD işlemleri i&ccedil;in ideal</li>
+          <li>Entity ilişki y&ouml;netimi (Cascade, Lazy Loading)</li>
+          <li>Dirty Checking ile otomatik g&uuml;ncelleme</li>
+          <li>Tekil kayıt g&uuml;ncelleme</li>
+        </ul>
+      </div>
+      <div style="flex: 1;">
+        <h5>jOOQ</h5>
+        <ul>
+          <li>Karmaşık raporlar ve dashboard verileri</li>
+          <li>&Ccedil;oklu JOIN, alt sorgu, gruplama</li>
+          <li>Pencere fonksiyonları (ROW_NUMBER, RANK)</li>
+          <li>Derleme zamanı tip g&uuml;venliği</li>
+          <li>&Uuml;retilen SQL &uuml;zerinde tam kontrol</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="quiz-container" data-section="9">
+    <h3 class="quiz-title">Bilgi Kontrol&uuml;</h3>
+    <div class="quiz-question" data-correct="B">
+      <p class="question-text">1. jOOQ nedir?</p>
+      <div class="quiz-options">
+        <button class="quiz-option" data-value="A">A) Bir ORM (Object-Relational Mapping) aracıdır</button>
+        <button class="quiz-option" data-value="B">B) SQL&rsquo;i Java kodu i&ccedil;inde tip g&uuml;venli olarak yazmayı sağlayan bir k&uuml;t&uuml;phanedir</button>
+        <button class="quiz-option" data-value="C">C) JPA spesifikasyonunun bir implementasyonudur</button>
+      </div>
+      <div class="quiz-feedback correct-feedback">&check; Doğru! jOOQ bir ORM değildir. SQL sorgularını Java i&ccedil;inde tip g&uuml;venli şekilde yazmayı sağlar.</div>
+      <div class="quiz-feedback incorrect-feedback">&cross; Yanlış. Doğru cevap B. jOOQ bir ORM değil, SQL&rsquo;i Java i&ccedil;inde tip g&uuml;venli olarak yazmaya yarayan bir k&uuml;t&uuml;phanedir.</div>
+    </div>
+    <div class="quiz-question" data-correct="C">
+      <p class="question-text">2. Aşağıdaki senaryolardan hangisinde jOOQ tercih edilmelidir?</p>
+      <div class="quiz-options">
+        <button class="quiz-option" data-value="A">A) Basit bir CRUD işlemi</button>
+        <button class="quiz-option" data-value="B">B) Tekil kayıt g&uuml;ncelleme</button>
+        <button class="quiz-option" data-value="C">C) Pencere fonksiyonları i&ccedil;eren karmaşık bir rapor sorgusu</button>
+      </div>
+      <div class="quiz-feedback correct-feedback">&check; Doğru! Pencere fonksiyonları, karmaşık JOIN&rsquo;ler ve raporlama sorguları jOOQ&rsquo;nun g&uuml;&ccedil;l&uuml; olduğu alanlardır.</div>
+      <div class="quiz-feedback incorrect-feedback">&cross; Yanlış. Doğru cevap C. Karmaşık raporlar ve pencere fonksiyonları i&ccedil;in jOOQ tercih edilmelidir. Basit CRUD i&ccedil;in Hibernate yeterlidir.</div>
+    </div>
+    <div class="quiz-question" data-correct="A">
+      <p class="question-text">3. jOOQ&rsquo;nun derleme zamanı tip g&uuml;venliği (compile-time safety) ne anlama gelir?</p>
+      <div class="quiz-options">
+        <button class="quiz-option" data-value="A">A) Tablo yapısı değiştiğinde, kod derleme aşamasında hata verir</button>
+        <button class="quiz-option" data-value="B">B) SQL sorguları otomatik optimize edilir</button>
+        <button class="quiz-option" data-value="C">C) Veritabanı bağlantısı derleme sırasında test edilir</button>
+      </div>
+      <div class="quiz-feedback correct-feedback">&check; Doğru! jOOQ, veritabanı şemasından Java sınıfları &uuml;rettiği i&ccedil;in, tablo yapısı değiştiğinde kodunuz derleme aşamasında hata verir.</div>
+      <div class="quiz-feedback incorrect-feedback">&cross; Yanlış. Doğru cevap A. jOOQ şemadan Java sınıfları &uuml;retir; tablo yapısı değişirse kod derleme aşamasında hata verir.</div>
+    </div>
+  </div>
+</section>
+
+<!-- Section 10: Hibrit Yaklaşım -->
+<section class="tutorial-section" id="section-10" data-section="10">
+  <h2 class="section-title"><span class="section-number">10</span> Hibrit Yaklaşım: Hibernate + jOOQ</h2>
+
+  <p>Aynı projede her iki aracı birlikte kullanmak m&uuml;mk&uuml;nd&uuml;r ve &ouml;nerilir:</p>
+  <ul>
+    <li><strong>Yazma (Write) işlemleri</strong>: Hibernate ile (Entity y&ouml;netimi, ilişkiler, validasyon)</li>
+    <li><strong>Karmaşık okuma (Read) işlemleri</strong>: jOOQ ile (Raporlar, dashboard, analitik)</li>
+  </ul>
+
+  <div class="concept-box">
+    <h4>Hibrit Yaklaşım Prensibi</h4>
+    <p>Hibrit yaklaşımda yazma işlemleri i&ccedil;in Hibernate&rsquo;in entity y&ouml;netimi, ilişki y&ouml;netimi ve validasyon &ouml;zellikleri kullanılırken; karmaşık okuma işlemleri i&ccedil;in jOOQ&rsquo;nun tip g&uuml;venli SQL yetenekleri kullanılır. Bu, her iki aracın g&uuml;&ccedil;l&uuml; y&ouml;nlerinden faydalanmayı sağlar.</p>
+  </div>
+
+  <h3>10.1 Aynı Projede Kullanım</h3>
+
+<pre><code class="language-java">@Service
+public class ProductDashboardService {
+
+    @Autowired
+    private ProductRepository productRepository;  // Spring Data JPA (Hibernate)
+
+    @Autowired
+    private DSLContext dsl;  // jOOQ
+
+    // Yazma islemi: Hibernate
+    @Transactional
+    public void createProduct(ProductCreateDTO dto) {
+        Product product = new Product();
+        product.setName(dto.getName());
+        product.setPrice(dto.getPrice());
+        productRepository.save(product);
+    }
+
+    // Karmasik okuma: jOOQ
+    @Transactional(readOnly = true)
+    public DashboardData getDashboard() {
+        // Bu tur bir sorguyu Hibernate ile yazmak cok zahmetli olurdu
+        return dsl
+            .select(
+                count().as("total_products"),
+                sum(PRODUCTS.PRICE).as("total_value"),
+                avg(PRODUCTS.PRICE).as("avg_price"),
+                countDistinct(PRODUCTS.CATEGORY).as("category_count")
+            )
+            .from(PRODUCTS)
+            .where(PRODUCTS.STATUS.eq("ACTIVE"))
+            .fetchOneInto(DashboardData.class);
+    }
+}</code></pre>
+
+  <h3>10.2 jOOQ ile SQL &Uuml;retip Hibernate ile &Ccedil;alıştırmak</h3>
+
+  <div class="concept-box">
+    <h4>SQL &Uuml;retim + Hibernate &Ccedil;alıştırma</h4>
+    <p>jOOQ&rsquo;yu sadece tip g&uuml;venli SQL string&rsquo;i &uuml;retmek i&ccedil;in kullanabilir, ardından bu SQL&rsquo;i Hibernate&rsquo;in <code>EntityManager</code>&rsquo;ı ile &ccedil;alıştırabilirsiniz. Bu sayede sonu&ccedil;, Hibernate tarafından y&ouml;netilen <strong>Managed Entity</strong>&rsquo;ler olarak d&ouml;ner.</p>
+  </div>
+
+<pre><code class="language-java">@Service
+public class HybridQueryService {
+
+    @PersistenceContext
+    private EntityManager entityManager;
+
+    @Autowired
+    private DSLContext dsl;
+
+    public List&lt;Product&gt; findComplexProducts() {
+        // 1. jOOQ ile tip guvenli SQL stringi URET (calistirma)
+        SelectConditionStep&lt;?&gt; jooqQuery = dsl
+            .selectFrom(PRODUCTS)
+            .where(PRODUCTS.STOCK.lt(10))
+            .and(PRODUCTS.CATEGORY.eq("ELECTRONICS"));
+
+        String sql = jooqQuery.getSQL();
+        // Cikti: "SELECT * FROM products WHERE stock &lt; ? AND category = ?"
+
+        List&lt;Object&gt; bindValues = jooqQuery.getBindValues();
+        // Cikti: [10, "ELECTRONICS"]
+
+        // 2. Hibernate'in Native Query'sine ver ve calistir
+        Query query = entityManager.createNativeQuery(sql, Product.class);
+        for (int i = 0; i &lt; bindValues.size(); i++) {
+            query.setParameter(i + 1, bindValues.get(i));
+        }
+
+        return query.getResultList();
+        // Sonuc: Hibernate tarafindan yonetilen MANAGED Entity'ler doner
+    }
+}</code></pre>
+
+  <div class="tip-box">
+    <strong>İpucu:</strong> jOOQ ile SQL &uuml;retip Hibernate ile &ccedil;alıştırdığınızda, d&ouml;nen nesneler <strong>Managed Entity</strong> olur. Yani &uuml;zerlerinde yapılan değişiklikler Dirty Checking ile otomatik olarak veritabanına yansır. Bu, hibrit yaklaşımın en g&uuml;&ccedil;l&uuml; y&ouml;nlerinden biridir.
+  </div>
+
+  <div class="comparison-box">
+    <h4>Hibrit Yaklaşımda G&ouml;rev Dağılımı</h4>
+    <div style="display: flex; gap: 20px;">
+      <div style="flex: 1;">
+        <h5>Hibernate (Yazma)</h5>
+        <ul>
+          <li>Yeni kayıt oluşturma (CREATE)</li>
+          <li>Tekil kayıt g&uuml;ncelleme (UPDATE)</li>
+          <li>Silme işlemleri (DELETE)</li>
+          <li>Entity ilişki y&ouml;netimi</li>
+          <li>Validasyon ve cascade işlemleri</li>
+        </ul>
+      </div>
+      <div style="flex: 1;">
+        <h5>jOOQ (Okuma)</h5>
+        <ul>
+          <li>Karmaşık raporlama sorguları</li>
+          <li>Dashboard verileri</li>
+          <li>Analitik sorgular</li>
+          <li>&Ccedil;oklu JOIN ve gruplama</li>
+          <li>Pencere fonksiyonları</li>
+          <li>Tip g&uuml;venli SQL &uuml;retimi</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="quiz-container" data-section="10">
+    <h3 class="quiz-title">Bilgi Kontrol&uuml;</h3>
+    <div class="quiz-question" data-correct="B">
+      <p class="question-text">1. Hibrit yaklaşımda yazma işlemleri i&ccedil;in hangi ara&ccedil; tercih edilir?</p>
+      <div class="quiz-options">
+        <button class="quiz-option" data-value="A">A) jOOQ</button>
+        <button class="quiz-option" data-value="B">B) Hibernate / Spring Data JPA</button>
+        <button class="quiz-option" data-value="C">C) JDBC</button>
+      </div>
+      <div class="quiz-feedback correct-feedback">&check; Doğru! Yazma işlemlerinde Hibernate&rsquo;in entity y&ouml;netimi, ilişki y&ouml;netimi ve validasyon &ouml;zellikleri kullanılır.</div>
+      <div class="quiz-feedback incorrect-feedback">&cross; Yanlış. Doğru cevap B. Hibrit yaklaşımda yazma işlemleri Hibernate/Spring Data JPA ile, karmaşık okuma işlemleri jOOQ ile yapılır.</div>
+    </div>
+    <div class="quiz-question" data-correct="A">
+      <p class="question-text">2. jOOQ ile SQL &uuml;retip Hibernate ile &ccedil;alıştırdığınızda d&ouml;nen nesneler hangi durumdadır?</p>
+      <div class="quiz-options">
+        <button class="quiz-option" data-value="A">A) Managed (Y&ouml;netilen) durumda &mdash; Dirty Checking aktif</button>
+        <button class="quiz-option" data-value="B">B) Detached (Ayrılmış) durumda</button>
+        <button class="quiz-option" data-value="C">C) Transient (Ge&ccedil;ici) durumda</button>
+      </div>
+      <div class="quiz-feedback correct-feedback">&check; Doğru! Hibernate&rsquo;in EntityManager&rsquo;ı ile &ccedil;alıştırılan native query&rsquo;den d&ouml;nen entity&rsquo;ler Managed durumdadır ve Dirty Checking aktiftir.</div>
+      <div class="quiz-feedback incorrect-feedback">&cross; Yanlış. Doğru cevap A. Hibernate EntityManager &uuml;zerinden &ccedil;alıştırılan native query&rsquo;lerden d&ouml;nen entity&rsquo;ler Managed durumdadır.</div>
+    </div>
+    <div class="quiz-question" data-correct="C">
+      <p class="question-text">3. Hibrit yaklaşımın en b&uuml;y&uuml;k avantajı nedir?</p>
+      <div class="quiz-options">
+        <button class="quiz-option" data-value="A">A) Daha az bağımlılık gerektirir</button>
+        <button class="quiz-option" data-value="B">B) Tek bir API &ouml;ğrenmek yeterlidir</button>
+        <button class="quiz-option" data-value="C">C) Her iki aracın g&uuml;&ccedil;l&uuml; y&ouml;nlerinden faydalanmayı sağlar</button>
+      </div>
+      <div class="quiz-feedback correct-feedback">&check; Doğru! Hibrit yaklaşım, Hibernate&rsquo;in entity y&ouml;netimindeki g&uuml;c&uuml;n&uuml; ve jOOQ&rsquo;nun karmaşık sorgu yeteneklerini bir araya getirir.</div>
+      <div class="quiz-feedback incorrect-feedback">&cross; Yanlış. Doğru cevap C. Hibrit yaklaşım, Hibernate&rsquo;in yazma tarafındaki ve jOOQ&rsquo;nun okuma tarafındaki g&uuml;&ccedil;l&uuml; y&ouml;nlerini birleştirir.</div>
+    </div>
+  </div>
+</section>

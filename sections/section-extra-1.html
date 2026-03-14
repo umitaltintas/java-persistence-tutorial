@@ -1,0 +1,745 @@
+<!-- Section 18: Caching Tuzaklari (Hibernate 2nd Level Cache ve Spring Cache) -->
+<section class="tutorial-section" id="section-18" data-section="18">
+  <h2 class="section-title"><span class="section-number">18</span> Caching Tuzaklari (Hibernate 2nd Level Cache ve Spring Cache)</h2>
+
+  <div class="concept-box">
+    <h4>Hibernate Second-Level Cache Nedir?</h4>
+    <p>Hibernate'in varsayilan First-Level Cache'i (Persistence Context) sadece tek bir transaction suresi boyunca yasarken, <strong>Second-Level Cache (L2)</strong> tum session'lar arasinda paylasilan, uygulama genelinde gecerli bir cache katmanidir. Amaci: Ayni Entity tekrar tekrar veritabanindan cekilmesin, cache'ten donsun.</p>
+  </div>
+
+  <h3>18.1 Hibernate 2nd Level Cache Nasil Aktive Edilir?</h3>
+
+  <h4>Maven Bagimliligi (EhCache Ornegi)</h4>
+
+<pre><code class="language-xml">&lt;dependency&gt;
+    &lt;groupId&gt;org.hibernate.orm&lt;/groupId&gt;
+    &lt;artifactId&gt;hibernate-jcache&lt;/artifactId&gt;
+&lt;/dependency&gt;
+&lt;dependency&gt;
+    &lt;groupId&gt;org.ehcache&lt;/groupId&gt;
+    &lt;artifactId&gt;ehcache&lt;/artifactId&gt;
+    &lt;classifier&gt;jakarta&lt;/classifier&gt;
+&lt;/dependency&gt;</code></pre>
+
+  <h4>application.yml Konfigurasyonu</h4>
+
+<pre><code class="language-yaml">spring:
+  jpa:
+    properties:
+      hibernate:
+        cache:
+          use_second_level_cache: true
+          region.factory_class: jcache
+        javax:
+          cache:
+            provider: org.ehcache.jsr107.EhcacheCachingProvider
+      jakarta:
+        persistence:
+          sharedCache:
+            mode: ENABLE_SELECTIVE  # Sadece @Cacheable olan Entity'ler cache'lenir</code></pre>
+
+  <h4>Entity Uzerinde Cache Aktive Etme</h4>
+
+<pre><code class="language-java">import jakarta.persistence.Cacheable;
+import org.hibernate.annotations.Cache;
+import org.hibernate.annotations.CacheConcurrencyStrategy;
+
+@Entity
+@Cacheable                                          // JPA standart anotasyonu
+@Cache(usage = CacheConcurrencyStrategy.READ_WRITE) // Hibernate ozel ayari
+public class Country {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    private String name;
+    private String code;
+
+    // Getter/Setter...
+}</code></pre>
+
+  <h3>18.2 Cache'in Gizli Overhead'i</h3>
+
+  <div class="warning-box">
+    <p><strong>Uyari:</strong> Cache "bedava hiz" degildir. Her islemde ek maliyet getirir:</p>
+    <ul>
+      <li><strong>Her READ isleminde:</strong> Once cache kontrol edilir, cache'te yoksa DB'ye gidilir, sonuc cache'e yazilir. Bu ekstra adimlar okuma islemlerini <em>yavaslatabilir</em>.</li>
+      <li><strong>Her WRITE isleminde:</strong> DB guncellenir VE cache de guncellenir/invalidate edilir. Yazma islemleri de <em>yavaslar</em>.</li>
+    </ul>
+  </div>
+
+<pre><code class="language-java">// Cache aktif oldugunda her findById() su adimlari izler:
+// 1. L2 Cache'te var mi? -&gt; Kontrol et (ekstra islem)
+// 2. Varsa: Cache'ten don (hizli!)
+// 3. Yoksa: DB'den cek + Cache'e yaz (ekstra islem)
+//
+// Yazma isleminde:
+// 1. DB'ye UPDATE yaz
+// 2. L2 Cache'teki ilgili entry'yi guncelle veya invalidate et (ekstra islem)
+// 3. Cluster'daki diger node'lara cache invalidation mesaji gonder (ekstra islem)</code></pre>
+
+  <div class="concept-box">
+    <h4>Cache Bypass ile Read Optimizasyonu</h4>
+    <p>Cache'in READ overhead'ini ortadan kaldirmak icin cache'i bypass edebilirsiniz. Ancak bu karmasikligi artirir ve kodun bakimini zorlastirir.</p>
+  </div>
+
+<pre><code class="language-java">// Cache bypass ornegi: Dogrudan DB'den oku, cache'i atla
+@Transactional(readOnly = true)
+public Product getProductDirectFromDb(Long id) {
+    Session session = entityManager.unwrap(Session.class);
+    // Cache'i bypass et, dogrudan DB'den oku
+    session.setCacheMode(CacheMode.IGNORE);
+    return session.get(Product.class, id);
+}</code></pre>
+
+  <h3>18.3 Spring Boot Method-Level Caching</h3>
+
+  <div class="concept-box">
+    <h4>Spring Cache vs Hibernate L2 Cache</h4>
+    <p>Hibernate L2 Cache Entity bazinda calisirken, Spring Cache <strong>metot bazinda</strong> calisir. Herhangi bir metodun donus degerini cache'leyebilirsiniz. Ikisi birbirinden bagimsizdir.</p>
+  </div>
+
+<pre><code class="language-java">// 1. Ana sinifta cache'i aktive edin
+@SpringBootApplication
+@EnableCaching  // Spring Cache'i aktive eder
+public class Application { ... }
+
+// 2. Servis metodlarinda kullanin
+@Service
+public class ProductService {
+
+    @Autowired private ProductRepository repository;
+
+    // Sonuc cache'lenir. Ayni id ile tekrar cagirildiginda DB'ye gidilmez.
+    @Cacheable(value = "products", key = "#id")
+    @Transactional(readOnly = true)
+    public ProductResponseDTO getById(Long id) {
+        return repository.findById(id)
+            .map(this::toDto)
+            .orElseThrow();
+    }
+
+    // Entity guncellendiginde cache'teki eski veriyi temizle
+    @CacheEvict(value = "products", key = "#id")
+    @Transactional
+    public void updateProduct(Long id, ProductPutDTO dto) {
+        Product product = repository.findById(id).orElseThrow();
+        product.setName(dto.getName());
+        product.setPrice(dto.getPrice());
+    }
+
+    // Tum cache'i temizle (dikkatli kullanin!)
+    @CacheEvict(value = "products", allEntries = true)
+    public void clearAllProductCache() {
+        // Cache tamamen temizlenir
+    }
+}</code></pre>
+
+  <h3>18.4 Cache Ne Zaman Kullanilmali?</h3>
+
+  <div class="good-practice">
+    <h4>DOGRU -- Statik/Nadir Degisen Veri icin Cache</h4>
+<pre><code class="language-java">// Ulke listesi, para birimi, kategori gibi nadir degisen veriler
+// Cache HARIKA calisir!
+@Entity
+@Cacheable
+@Cache(usage = CacheConcurrencyStrategy.READ_ONLY)  // Hic degismez!
+public class Country {
+    @Id private Long id;
+    private String name;
+    private String code;
+}
+
+// Konfigurasyon tablolari, enum tablolari icin idealdir.
+// Bu veriler uygulama boyunca hemen hemen hic degismez.</code></pre>
+  </div>
+
+  <div class="bad-practice">
+    <h4>YANLIS -- Sik Degisen Veri icin Cache</h4>
+<pre><code class="language-java">// Siparis, stok, fiyat gibi surekli degisen veriler
+// Cache TEHLIKELI! Stale data riski yuksek!
+@Entity
+@Cacheable  // KOTU FIKIR!
+@Cache(usage = CacheConcurrencyStrategy.READ_WRITE)
+public class Order {
+    @Id private Long id;
+    private OrderStatus status;       // Surekli degisiyor
+    private BigDecimal totalAmount;   // Surekli degisiyor
+    private LocalDateTime updatedAt;  // Surekli degisiyor
+}
+// Cache surekli invalidate edilecek -&gt; overhead &gt; kazanc
+// Ayrica cluster ortaminda stale data riski!</code></pre>
+  </div>
+
+  <h3>18.5 Startup Time Problemi</h3>
+
+  <div class="warning-box">
+    <p><strong>Uyari:</strong> Cache'i warm-up (on isitma) ile doldurmak isteyebilirsiniz. Ancak buyuk veri setlerinde her instance baslarken GB'larca veriyi cache'e yuklemek startup suresini dakikalarca uzatabilir. Ozellikle Kubernetes gibi ortamlarda pod'lar hizla ayaga kalkmali -- uzun startup sureleri health check hatasi ve restart dongusu olusturabilir.</p>
+  </div>
+
+<pre><code class="language-java">// DIKKAT: Bu yaklasim kucuk veri setleri icin uygun,
+// buyuk veri setlerinde startup'i dakikalarca uzatir!
+@Component
+public class CacheWarmup implements ApplicationRunner {
+
+    @Autowired private CountryService countryService;
+
+    @Override
+    public void run(ApplicationArguments args) {
+        // 200 ulke icin sorun yok
+        countryService.getAllCountries();  // Cache'e yukler
+
+        // AMA 10 milyon urun icin? Startup 5 dakika surer!
+        // productService.getAllProducts();  // YAPMAYIN!
+    }
+}</code></pre>
+
+  <h3>18.6 Best Practice: Cache En Son Care Olsun</h3>
+
+  <div class="tip-box">
+    <p><strong>Ipucu:</strong> Cache eklemeden once su adimlari izleyin:</p>
+    <ol>
+      <li><strong>Sorguyu optimize edin:</strong> INDEX ekleyin, N+1 problemini cozun, DTO Projection kullanin</li>
+      <li><strong>Veritabanini optimize edin:</strong> Connection pool ayarlari, query plan analizi</li>
+      <li><strong>Hala yavas mi?</strong> ANCAK o zaman cache dusunun</li>
+    </ol>
+    <p>Cache karmasiklik ekler (invalidation, stale data, cluster sync, memory yonetimi). Sorguyu optimize etmek her zaman daha basit ve surdurulebilir bir cozumdur.</p>
+  </div>
+
+  <div class="quiz-container" data-section="18">
+    <h3 class="quiz-title">Bilgi Kontrolu</h3>
+    <div class="quiz-question" data-correct="C">
+      <p class="question-text">1. Hibernate Second-Level Cache hangi tur veri icin en uygun secimdir?</p>
+      <div class="quiz-options">
+        <button class="quiz-option" data-value="A">A) Surekli guncellenen siparis verileri</button>
+        <button class="quiz-option" data-value="B">B) Kullanici oturum bilgileri</button>
+        <button class="quiz-option" data-value="C">C) Nadiren degisen referans verileri (ulke listesi, para birimi gibi)</button>
+      </div>
+      <div class="quiz-feedback correct-feedback">&#10003; Dogru! L2 Cache statik veya nadir degisen referans verileri icin idealdir. Surekli degisen veriler icin cache overhead'i kazanctan fazla olur.</div>
+      <div class="quiz-feedback incorrect-feedback">&#10007; Yanlis. Dogru cevap C: Cache, nadir degisen referans verileri icin idealdir. Sik degisen verilerde stale data riski ve invalidation overhead'i yuksektir.</div>
+    </div>
+    <div class="quiz-question" data-correct="B">
+      <p class="question-text">2. Cache aktif oldugunda READ islemlerinde ne olur?</p>
+      <div class="quiz-options">
+        <button class="quiz-option" data-value="A">A) Her zaman daha hizli calisir, hic dezavantaji yoktur</button>
+        <button class="quiz-option" data-value="B">B) Once cache kontrol edilir, yoksa DB'ye gidilir -- cache miss durumunda overhead ekler</button>
+        <button class="quiz-option" data-value="C">C) Dogrudan veritabanindan okur, cache etkisizdir</button>
+      </div>
+      <div class="quiz-feedback correct-feedback">&#10003; Dogru! Her read isleminde once cache kontrol edilir. Cache hit varsa hizlidir, ancak cache miss durumunda hem cache kontrolu hem DB erisimi yapilir ve ekstra overhead olusur.</div>
+      <div class="quiz-feedback incorrect-feedback">&#10007; Yanlis. Dogru cevap B: Cache her read isleminde kontrol edilir. Cache miss durumunda hem cache kontrol maliyeti hem DB erisimi birlikte olusur, bu da overhead ekler.</div>
+    </div>
+    <div class="quiz-question" data-correct="A">
+      <p class="question-text">3. Performans problemi yasandiginda ilk yapilmasi gereken nedir?</p>
+      <div class="quiz-options">
+        <button class="quiz-option" data-value="A">A) Sorguyu optimize etmek (INDEX, DTO Projection, N+1 cozumu)</button>
+        <button class="quiz-option" data-value="B">B) Hemen L2 Cache eklemek</button>
+        <button class="quiz-option" data-value="C">C) Daha guclu bir sunucu satin almak</button>
+      </div>
+      <div class="quiz-feedback correct-feedback">&#10003; Dogru! Cache en son care olmalidir. Once sorguyu optimize edin, INDEX ekleyin, N+1 problemini cozun. Cache karmasiklik ekler, sorgu optimizasyonu daha basit ve surdurulebilirdir.</div>
+      <div class="quiz-feedback incorrect-feedback">&#10007; Yanlis. Dogru cevap A: Once sorguyu optimize etmek gerekir. Cache karmasiklik ekler ve bakim maliyeti yuksektir. Sorgu optimizasyonu her zaman oncelikli olmalidir.</div>
+    </div>
+  </div>
+</section>
+
+<!-- Section 19: SQL Ogrenmek Neden Kritik? -->
+<section class="tutorial-section" id="section-19" data-section="19">
+  <h2 class="section-title"><span class="section-number">19</span> SQL Ogrenmek Neden Kritik?</h2>
+
+  <div class="warning-box">
+    <p><strong>Thorben'in Ana Mesaji:</strong> "Framework SQL'i benden gizliyor, SQL ogrenmeme gerek yok" dusuncesi production ortaminda patlamalarin en buyuk sebeplerinden biridir. Hibernate/Spring Data <strong>iyi SQL uretir</strong>, AMA gelistirici yanlis input verirse (yanlis entity mapping, yanlis iliski tanimlari) uretilen SQL de kotu olur.</p>
+  </div>
+
+  <h3>19.1 Framework Suclama Sendromu</h3>
+
+  <div class="concept-box">
+    <h4>"Framework Kotu SQL Uretiyor" Efsanesi</h4>
+    <p>Gelistiriciler sik sik "Hibernate yavas SQL uretiyor" derler. Gercekte sorun Hibernate degil, <strong>yanlis konfigurasyondur</strong>. Framework'u suclamak yerine, framework'un nasil calistigini ogrenmeniz ve dogru input vermeniz gerekir.</p>
+  </div>
+
+  <div class="bad-practice">
+    <h4>YANLIS -- Kotu Entity Mapping (Kotu SQL Uretir)</h4>
+<pre><code class="language-java">@Entity
+public class Order {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    // HATA 1: FetchType.EAGER -- Her Order sorgulandiginda
+    // TUM item'lar otomatik cekilir (gereksiz JOIN veya N+1)
+    @OneToMany(mappedBy = "order", fetch = FetchType.EAGER)
+    private List&lt;OrderItem&gt; items;
+
+    // HATA 2: FetchType.EAGER -- Her Order sorgulandiginda
+    // musteri bilgisi de cekilir
+    @ManyToOne(fetch = FetchType.EAGER)
+    private Customer customer;
+
+    // HATA 3: FetchType.EAGER -- Odeme bilgisi de cekilir
+    @OneToOne(fetch = FetchType.EAGER)
+    private Payment payment;
+}
+
+// SONUC: Basit bir "SELECT * FROM orders" sorgusu bile
+// arka planda 4 tablo JOIN'liyor veya N+1 sorgu atiyor!
+// "Hibernate yavas" degil, SEN yanlis mapping yaptin!</code></pre>
+  </div>
+
+  <div class="good-practice">
+    <h4>DOGRU -- Dogru Entity Mapping (Verimli SQL Uretir)</h4>
+<pre><code class="language-java">@Entity
+public class Order {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    // DOGRU: LAZY -- Sadece eristiginde yuklenir
+    @OneToMany(mappedBy = "order", fetch = FetchType.LAZY)
+    private List&lt;OrderItem&gt; items;
+
+    // DOGRU: LAZY -- Sadece gerektiginde yuklenir
+    @ManyToOne(fetch = FetchType.LAZY)
+    private Customer customer;
+
+    // DOGRU: LAZY -- Sadece gerektiginde yuklenir
+    @OneToOne(fetch = FetchType.LAZY)
+    private Payment payment;
+}
+
+// Ihtiyac oldugunda JOIN FETCH ile cek:
+@Query("SELECT o FROM Order o JOIN FETCH o.items WHERE o.id = :id")
+Optional&lt;Order&gt; findWithItems(@Param("id") Long id);
+
+// Sadece ozet bilgi lazimsa DTO Projection kullan:
+@Query("SELECT new com.example.dto.OrderSummary(o.id, o.status, o.createdAt) " +
+       "FROM Order o WHERE o.status = :status")
+List&lt;OrderSummary&gt; findSummaries(@Param("status") OrderStatus status);</code></pre>
+  </div>
+
+  <h3>19.2 Temel SQL Bilgisi (1-3 Gunde Ogrenilebilir)</h3>
+
+  <div class="concept-box">
+    <h4>Her Java Gelistiricisinin Bilmesi Gereken SQL</h4>
+    <p>Asagidaki temel SQL bilgisi 1-3 gun icinde ogrenilebilir ve Hibernate'in urettigi SQL'i anlamaniz icin yeterlidir:</p>
+  </div>
+
+<pre><code class="language-sql">-- 1. INSERT: Yeni kayit ekleme
+INSERT INTO products (name, price, category)
+VALUES ('Laptop', 15000.00, 'Elektronik');
+
+-- 2. SELECT: Veri sorgulama
+SELECT p.name, p.price
+FROM products p
+WHERE p.category = 'Elektronik'
+ORDER BY p.price DESC;
+
+-- 3. JOIN: Tablolari birlestirme
+-- Hibernate'in urettigi SQL'leri anlamak icin JOIN bilmek SART!
+SELECT o.id, o.status, c.name AS customer_name
+FROM orders o
+INNER JOIN customers c ON o.customer_id = c.id
+WHERE o.status = 'ACTIVE';
+
+-- 4. INDEX: Sorgu performansini artirma
+-- Hibernate INDEX olusturmaz! Bunu SIZ yapmaniz gerekir.
+CREATE INDEX idx_products_category ON products (category);
+CREATE INDEX idx_orders_status ON orders (status);
+CREATE INDEX idx_orders_customer_id ON orders (customer_id);</code></pre>
+
+  <h3>19.3 Ileri SQL (Zamanla Ogrenilecek)</h3>
+
+<pre><code class="language-sql">-- Window Functions: Siralama, gruplama icinde hesaplama
+SELECT name, price, category,
+       RANK() OVER (PARTITION BY category ORDER BY price DESC) AS rank_in_category
+FROM products;
+
+-- CTE (Common Table Expression): Karmasik sorulari parcalama
+WITH expensive_products AS (
+    SELECT * FROM products WHERE price &gt; 10000
+)
+SELECT category, COUNT(*) AS count, AVG(price) AS avg_price
+FROM expensive_products
+GROUP BY category;
+
+-- Karmasik Subquery
+SELECT *
+FROM orders o
+WHERE o.total_amount &gt; (
+    SELECT AVG(total_amount) FROM orders WHERE status = 'COMPLETED'
+);</code></pre>
+
+  <h3>19.4 Object-Relational Impedance Mismatch</h3>
+
+  <div class="concept-box">
+    <h4>Nesne-Tablo Uyumsuzlugu</h4>
+    <p>Java'daki nesne modeli ile SQL'deki iliskisel model arasinda temel farkliliklar vardir. Bu uyumsuzluk ORM'lerin varlik sebebidir, ama ayni zamanda en buyuk tuzak kaynagidir.</p>
+  </div>
+
+  <table class="info-table">
+    <thead>
+      <tr>
+        <th>Ozellik</th>
+        <th>Java (Nesne Modeli)</th>
+        <th>SQL (Iliskisel Model)</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Kalitim (Inheritance)</strong></td>
+        <td>Dogal: <code>class Dog extends Animal</code></td>
+        <td>Yok! Farkli stratejiler gerekir (SINGLE_TABLE, JOINED, TABLE_PER_CLASS)</td>
+      </tr>
+      <tr>
+        <td><strong>Kimlik</strong></td>
+        <td><code>==</code> ve <code>equals()</code> farki</td>
+        <td>PRIMARY KEY</td>
+      </tr>
+      <tr>
+        <td><strong>Iliskiler</strong></td>
+        <td>Referans: <code>order.getCustomer()</code></td>
+        <td>Foreign Key + JOIN</td>
+      </tr>
+      <tr>
+        <td><strong>Veri Erisimi</strong></td>
+        <td>Navigasyon: <code>a.getB().getC()</code></td>
+        <td>JOIN ile duz tablo sonucu</td>
+      </tr>
+    </tbody>
+  </table>
+
+<pre><code class="language-java">// Java'da kalitim dogal:
+public abstract class Payment { ... }
+public class CreditCardPayment extends Payment { ... }
+public class BankTransferPayment extends Payment { ... }
+
+// SQL'de kalitim YOKTUR! Hibernate 3 strateji sunar:
+@Entity
+@Inheritance(strategy = InheritanceType.SINGLE_TABLE) // En hizli, ama null alanlar olusur
+// veya
+@Inheritance(strategy = InheritanceType.JOINED)       // Normalizasyon iyi, ama JOIN maliyeti
+// veya
+@Inheritance(strategy = InheritanceType.TABLE_PER_CLASS) // Her sinif ayri tablo, UNION gerekir</code></pre>
+
+  <div class="tip-box">
+    <p><strong>Ipucu:</strong> SQL ogrenmek icin harcayacaginiz 1-3 gun, production'da haftalar surecek debug suresinden sizi kurtarir. Hibernate'in urettigi SQL'i okuyamazsaniz, performans problemlerini teshis edemezsiniz.</p>
+  </div>
+
+  <div class="quiz-container" data-section="19">
+    <h3 class="quiz-title">Bilgi Kontrolu</h3>
+    <div class="quiz-question" data-correct="B">
+      <p class="question-text">1. "Hibernate kotu SQL uretiyor" sikayetinin gercek sebebi genellikle nedir?</p>
+      <div class="quiz-options">
+        <button class="quiz-option" data-value="A">A) Hibernate eski bir teknolojidir ve modern SQL'i desteklemez</button>
+        <button class="quiz-option" data-value="B">B) Gelistirici yanlis entity mapping ve iliski tanimlari yapmistir</button>
+        <button class="quiz-option" data-value="C">C) Veritabani sunucusu yavas calisiyordur</button>
+      </div>
+      <div class="quiz-feedback correct-feedback">&#10003; Dogru! Hibernate iyi SQL uretir, ancak yanlis mapping (FetchType.EAGER, eksik index, yanlis iliski tanimlari) kotu SQL'e yol acar. Sorun framework degil, framework'a verilen inputtur.</div>
+      <div class="quiz-feedback incorrect-feedback">&#10007; Yanlis. Dogru cevap B: Hibernate'in urettigi SQL, gelistiricinin verdigi mapping'e baglidir. Yanlis mapping = kotu SQL. Framework'u suclamak yerine dogru mapping ogrenilmelidir.</div>
+    </div>
+    <div class="quiz-question" data-correct="A">
+      <p class="question-text">2. Object-Relational Impedance Mismatch'in en belirgin ornegi nedir?</p>
+      <div class="quiz-options">
+        <button class="quiz-option" data-value="A">A) Java'da kalitim (inheritance) dogal bir ozellikken, SQL'de kalitim kavrami yoktur</button>
+        <button class="quiz-option" data-value="B">B) Java String ile SQL VARCHAR ayni uzunlukta degildir</button>
+        <button class="quiz-option" data-value="C">C) Java'da transaction kavrami yoktur</button>
+      </div>
+      <div class="quiz-feedback correct-feedback">&#10003; Dogru! Java'da <code>class Dog extends Animal</code> yazmak dogaldir, ancak SQL'de kalitim yoktur. Hibernate bunu SINGLE_TABLE, JOINED veya TABLE_PER_CLASS stratejileriyle simule eder ve her birinin trade-off'lari vardir.</div>
+      <div class="quiz-feedback incorrect-feedback">&#10007; Yanlis. Dogru cevap A: Inheritance Java'da dogal bir ozellikken SQL'de boyle bir kavram yoktur. Bu uyumsuzluk ORM'lerin en zorlayici noktalarindan biridir.</div>
+    </div>
+    <div class="quiz-question" data-correct="C">
+      <p class="question-text">3. Asagidakilerden hangisi temel SQL bilgisi kapsaminda 1-3 gunde ogrenilebilecek konular arasindadir?</p>
+      <div class="quiz-options">
+        <button class="quiz-option" data-value="A">A) Window functions ve CTE'ler</button>
+        <button class="quiz-option" data-value="B">B) Query optimizer icleri ve execution plan analizi</button>
+        <button class="quiz-option" data-value="C">C) INSERT, SELECT, JOIN ve INDEX kavramlari</button>
+      </div>
+      <div class="quiz-feedback correct-feedback">&#10003; Dogru! INSERT, SELECT, JOIN ve INDEX temel SQL bilgisidir ve kisa surede ogrenilebilir. Window functions ve CTE'ler ise ileri seviye konularidir.</div>
+      <div class="quiz-feedback incorrect-feedback">&#10007; Yanlis. Dogru cevap C: INSERT, SELECT, JOIN ve INDEX kavramlari temel SQL bilgisidir ve 1-3 gunde ogrenilebilir. Window functions ve CTE'ler ileri seviye konulardir.</div>
+    </div>
+  </div>
+</section>
+
+<!-- Section 20: Gelistirme Sirasinda SQL Izleme -->
+<section class="tutorial-section" id="section-20" data-section="20">
+  <h2 class="section-title"><span class="section-number">20</span> Gelistirme Sirasinda SQL Izleme</h2>
+
+  <div class="warning-box">
+    <p><strong>Thorben'in En Onemli Tavsiyesi:</strong> "SQL statement'lari development sirasinda MUTLAKA izleyin. Production'da performans problemi yasiyorsaniz ve development'ta hic SQL izlemediyseniz, sikayetci olma hakkiniz yoktur."</p>
+  </div>
+
+  <h3>20.1 Hibernate show-sql Ayari (Temel Yontem)</h3>
+
+  <div class="concept-box">
+    <h4>En Basit Yol: show-sql</h4>
+    <p>Hibernate'in urettigi tum SQL'leri konsola yazdirmanin en kolay yolu <code>show-sql: true</code> ayaridir. Ancak bu yontem parametreleri gostermez ve ciktiyi formatlamaz.</p>
+  </div>
+
+<pre><code class="language-yaml"># application.yml -- Temel SQL gosterme
+spring:
+  jpa:
+    show-sql: true          # SQL'leri konsola yazdir
+    properties:
+      hibernate:
+        format_sql: true    # SQL'leri okunabilir formatta yazdir</code></pre>
+
+  <div class="tip-box">
+    <p><strong>Ipucu:</strong> <code>show-sql</code> SQL'leri <code>System.out</code>'a yazdirir (loglama framework'unu bypass eder). Daha iyi kontrol icin loglama seviyelerini kullanin (Bolum 20.2).</p>
+  </div>
+
+  <h3>20.2 Log Seviyelerini Ayarlama (Onerilen Yontem)</h3>
+
+<pre><code class="language-yaml"># application.yml -- Log seviyesi ile SQL izleme (ONERILEN)
+spring:
+  jpa:
+    show-sql: false   # System.out yerine loglama kullan
+
+logging:
+  level:
+    # Hibernate'in urettigi SQL'leri gor
+    org.hibernate.SQL: DEBUG
+
+    # SQL parametrelerini gor (? yerine gercek degerleri goster)
+    org.hibernate.orm.jdbc.bind: TRACE
+
+    # Transaction islemlerini izle
+    org.hibernate.engine.transaction: DEBUG</code></pre>
+
+  <h4>Konsol Ciktisi Ornegi</h4>
+
+<pre><code class="language-text">-- org.hibernate.SQL: DEBUG
+Hibernate:
+    select
+        p1_0.id,
+        p1_0.name,
+        p1_0.price,
+        p1_0.category
+    from
+        products p1_0
+    where
+        p1_0.category=?
+
+-- org.hibernate.orm.jdbc.bind: TRACE
+binding parameter (1:VARCHAR) &lt;- [Elektronik]</code></pre>
+
+  <h3>20.3 Hibernate Statistics (Istatistikler)</h3>
+
+  <div class="concept-box">
+    <h4>Hibernate Statistics Nedir?</h4>
+    <p>Hibernate, bir transaction veya session icinde kac sorgu calistigini, kac cache hit oldugunu ve ne kadar zaman harcandigini olcebilir. N+1 problemini tespit etmenin en kolay yoludur.</p>
+  </div>
+
+<pre><code class="language-yaml"># application.yml -- Hibernate istatistiklerini aktive et
+spring:
+  jpa:
+    properties:
+      hibernate:
+        generate_statistics: true
+
+logging:
+  level:
+    org.hibernate.stat: DEBUG</code></pre>
+
+  <h4>Cikti Ornegi</h4>
+
+<pre><code class="language-text">-- Session Metrics --
+    242700 nanoseconds spent acquiring 1 JDBC connections;
+    0 nanoseconds spent releasing 0 JDBC connections;
+    505200 nanoseconds spent preparing 6 JDBC statements;
+    2025400 nanoseconds spent executing 6 JDBC statements;
+    0 nanoseconds spent executing 0 JDBC batches;
+    0 nanoseconds spent performing 0 L2C puts;
+    0 nanoseconds spent performing 0 L2C hits;
+    0 nanoseconds spent performing 0 L2C misses;
+
+-- DIKKAT: 6 JDBC statements! Belki de 1 olmali?
+-- Bu N+1 probleminin acik bir isaretedir!</code></pre>
+
+  <h3>20.4 p6spy ile Detayli SQL Loglama</h3>
+
+  <div class="concept-box">
+    <h4>p6spy Nedir?</h4>
+    <p>p6spy, JDBC driver'inizi sarmalayarak (wrap ederek) her SQL sorgusunu, parametreleriyle birlikte loglar. Hibernate'in gostermedigi detaylari (gercek parametre degerleri, calisma suresi) gosterir.</p>
+  </div>
+
+  <h4>Maven Bagimliligi</h4>
+
+<pre><code class="language-xml">&lt;dependency&gt;
+    &lt;groupId&gt;com.github.gavlyukovskiy&lt;/groupId&gt;
+    &lt;artifactId&gt;p6spy-spring-boot-starter&lt;/artifactId&gt;
+    &lt;version&gt;1.9.1&lt;/version&gt;
+    &lt;scope&gt;runtime&lt;/scope&gt;  &lt;!-- Sadece runtime'da gerekli --&gt;
+&lt;/dependency&gt;</code></pre>
+
+  <h4>application.yml Konfigurasyonu</h4>
+
+<pre><code class="language-yaml"># p6spy konfigurasyonu
+decorator:
+  datasource:
+    p6spy:
+      enable-logging: true
+      multiline: true        # SQL'i formatlayarak goster
+      logging: slf4j         # Loglama framework'u ile entegre
+      log-format: "\n\tExecution Time: %(executionTime)ms\n\tSQL: %(sqlSingleLine)"</code></pre>
+
+  <h4>Cikti Ornegi</h4>
+
+<pre><code class="language-text">    Execution Time: 3ms
+    SQL: select p.id, p.name, p.price, p.category from products p where p.category = 'Elektronik'
+
+    Execution Time: 1ms
+    SQL: select o.id, o.status from orders o where o.product_id = 42
+
+    Execution Time: 15ms  &lt;-- YAVAS! Neden?
+    SQL: select * from order_items oi where oi.order_id IN (1,2,3,...,100)</code></pre>
+
+  <h3>20.5 datasource-proxy Alternatifi</h3>
+
+<pre><code class="language-xml">&lt;dependency&gt;
+    &lt;groupId&gt;com.github.gavlyukovskiy&lt;/groupId&gt;
+    &lt;artifactId&gt;datasource-proxy-spring-boot-starter&lt;/artifactId&gt;
+    &lt;version&gt;1.9.1&lt;/version&gt;
+    &lt;scope&gt;runtime&lt;/scope&gt;
+&lt;/dependency&gt;</code></pre>
+
+<pre><code class="language-yaml"># datasource-proxy konfigurasyonu
+decorator:
+  datasource:
+    datasource-proxy:
+      logging: slf4j
+      query:
+        enable-logging: true
+        log-level: DEBUG
+      slow-query:
+        enable-logging: true
+        log-level: WARN
+        threshold: 300    # 300ms'den yavas sorgulari WARN ile logla</code></pre>
+
+  <h3>20.6 Slow Query Detection (Yavas Sorgu Tespiti)</h3>
+
+  <div class="warning-box">
+    <p><strong>Uyari:</strong> Development ortaminda yavas sorgu tespitini aktive edin. Production'a gitmeden once sorunlu sorgulari yakalayabilirsiniz.</p>
+  </div>
+
+<pre><code class="language-yaml"># Hibernate yerlesik slow query tespiti
+spring:
+  jpa:
+    properties:
+      hibernate:
+        session:
+          events:
+            log:
+              LOG_QUERIES_SLOWER_THAN_MS: 25  # 25ms'den yavas sorgulari logla</code></pre>
+
+<pre><code class="language-java">// Programatik slow query loglama (Custom Interceptor)
+@Component
+public class QueryCountInterceptor implements HandlerInterceptor {
+
+    // Her HTTP request icin kac SQL sorgusu calistigini say
+    // Eger bir endpoint 10'dan fazla sorgu atiyorsa, N+1 problemi olabilir!
+
+    @Override
+    public void afterCompletion(HttpServletRequest request,
+                                 HttpServletResponse response,
+                                 Object handler, Exception ex) {
+        Statistics stats = entityManagerFactory.unwrap(SessionFactory.class)
+            .getStatistics();
+        long queryCount = stats.getQueryExecutionCount();
+
+        if (queryCount &gt; 10) {
+            log.warn("UYARI: {} endpoint'i {} sorgu calistirdi!",
+                request.getRequestURI(), queryCount);
+        }
+    }
+}</code></pre>
+
+  <h3>20.7 Tam Gelistirme Ortami Konfigurasyonu</h3>
+
+  <div class="good-practice">
+    <h4>DOGRU -- Development Ortami icin Tam Konfigurasyon</h4>
+<pre><code class="language-yaml"># application-dev.yml (Sadece development profili)
+spring:
+  jpa:
+    show-sql: false    # System.out yerine loglama kullan
+    properties:
+      hibernate:
+        format_sql: true
+        generate_statistics: true
+        session:
+          events:
+            log:
+              LOG_QUERIES_SLOWER_THAN_MS: 25
+
+logging:
+  level:
+    org.hibernate.SQL: DEBUG
+    org.hibernate.orm.jdbc.bind: TRACE
+    org.hibernate.stat: DEBUG
+
+# p6spy (opsiyonel -- daha detayli izleme)
+decorator:
+  datasource:
+    p6spy:
+      enable-logging: true
+      multiline: true
+      logging: slf4j</code></pre>
+  </div>
+
+  <div class="bad-practice">
+    <h4>YANLIS -- Production'da Detayli SQL Loglama</h4>
+<pre><code class="language-yaml"># application-prod.yml -- ASLA boyle yapmayin!
+spring:
+  jpa:
+    show-sql: true                    # Performans etkisi!
+    properties:
+      hibernate:
+        generate_statistics: true     # Performans etkisi!
+
+logging:
+  level:
+    org.hibernate.SQL: DEBUG          # Log dosyalari GB'larca buyur!
+    org.hibernate.orm.jdbc.bind: TRACE  # Hassas veriler loglara duser!
+
+# Production'da SQL loglama kapali olmali!
+# Hassas veriler (sifre, kredi karti) loglara dusebilir!</code></pre>
+  </div>
+
+  <div class="tip-box">
+    <p><strong>Ipucu:</strong> Spring profiles kullanarak development ve production konfigurasyonlarini ayirin. <code>application-dev.yml</code> dosyasinda detayli loglama acik, <code>application-prod.yml</code> dosyasinda kapali olmalidir. Boylece development'ta her seyi gorup, production'da performans etkisi olmaz.</p>
+  </div>
+
+  <div class="quiz-container" data-section="20">
+    <h3 class="quiz-title">Bilgi Kontrolu</h3>
+    <div class="quiz-question" data-correct="B">
+      <p class="question-text">1. Hibernate SQL loglamasinda parametrelerin gercek degerlerini gormek icin hangi ayar kullanilir?</p>
+      <div class="quiz-options">
+        <button class="quiz-option" data-value="A">A) spring.jpa.show-sql: true</button>
+        <button class="quiz-option" data-value="B">B) org.hibernate.orm.jdbc.bind: TRACE</button>
+        <button class="quiz-option" data-value="C">C) hibernate.format_sql: true</button>
+      </div>
+      <div class="quiz-feedback correct-feedback">&#10003; Dogru! <code>org.hibernate.orm.jdbc.bind: TRACE</code> ayari SQL parametrelerinin gercek degerlerini (? yerine) gosterir. <code>show-sql</code> sadece SQL'i gosterir, parametreleri gostermez.</div>
+      <div class="quiz-feedback incorrect-feedback">&#10007; Yanlis. Dogru cevap B: <code>org.hibernate.orm.jdbc.bind: TRACE</code> ayari parametrelerin gercek degerlerini gosterir. <code>show-sql</code> parametreleri gostermez, <code>format_sql</code> ise sadece formatlama yapar.</div>
+    </div>
+    <div class="quiz-question" data-correct="C">
+      <p class="question-text">2. Hibernate Statistics ile asagidakilerden hangisi tespit edilebilir?</p>
+      <div class="quiz-options">
+        <button class="quiz-option" data-value="A">A) Sadece SQL syntax hatalari</button>
+        <button class="quiz-option" data-value="B">B) Sadece transaction rollback sayisi</button>
+        <button class="quiz-option" data-value="C">C) Calisan sorgu sayisi, cache hit/miss oranlari ve N+1 problemi</button>
+      </div>
+      <div class="quiz-feedback correct-feedback">&#10003; Dogru! Hibernate Statistics toplam JDBC statement sayisini, cache hit/miss oranlarini ve harcanan zamani gosterir. Bir islem icin beklenenden fazla sorgu calisiyorsa N+1 problemi vardir.</div>
+      <div class="quiz-feedback incorrect-feedback">&#10007; Yanlis. Dogru cevap C: Hibernate Statistics calisan sorgu sayisi, cache hit/miss oranlari, JDBC baglanti sureleri gibi detayli bilgiler saglar ve N+1 problemi tespitinde kritik oneme sahiptir.</div>
+    </div>
+    <div class="quiz-question" data-correct="A">
+      <p class="question-text">3. Production ortaminda detayli SQL loglama neden kapatilmalidir?</p>
+      <div class="quiz-options">
+        <button class="quiz-option" data-value="A">A) Performans etkisi olusturur ve hassas veriler (sifre, kredi karti) loglara dusebilir</button>
+        <button class="quiz-option" data-value="B">B) SQL loglama sadece H2 veritabani ile calisir</button>
+        <button class="quiz-option" data-value="C">C) Production'da Hibernate SQL uretmez</button>
+      </div>
+      <div class="quiz-feedback correct-feedback">&#10003; Dogru! Production'da detayli loglama hem performansi etkiler (I/O maliyeti, CPU kullanimi) hem de hassas verilerin log dosyalarina yazilmasina neden olabilir. Spring profiles ile dev/prod ayrimini yapin.</div>
+      <div class="quiz-feedback incorrect-feedback">&#10007; Yanlis. Dogru cevap A: Detayli SQL loglama production'da performans etkisi yaratir ve hassas verilerin log dosyalarina dusme riski vardir. Bu nedenle Spring profiles ile ortam ayrimi yapilmalidir.</div>
+    </div>
+  </div>
+</section>

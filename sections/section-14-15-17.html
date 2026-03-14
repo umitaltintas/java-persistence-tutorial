@@ -1,0 +1,953 @@
+<!-- Section 14: REST API'lerde PUT ve PATCH Best Practices -->
+<section class="tutorial-section" id="section-14" data-section="14">
+  <h2 class="section-title"><span class="section-number">14</span> REST API'lerde PUT ve PATCH Best Practices</h2>
+
+  <h3>14.1 PUT vs PATCH Farki</h3>
+
+  <div class="comparison-box">
+    <table class="info-table">
+      <thead>
+        <tr>
+          <th>Ozellik</th>
+          <th>PUT (Tam Degistirme)</th>
+          <th>PATCH (Kismi Guncelleme)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Anlam</strong></td>
+          <td>"Gonderdigimle tamamen degistir"</td>
+          <td>"Sadece gonderdigim alanlari guncelle"</td>
+        </tr>
+        <tr>
+          <td><strong>Gelen JSON</strong></td>
+          <td>TUM alanlar gonderilmeli</td>
+          <td>Sadece degisecek alanlar</td>
+        </tr>
+        <tr>
+          <td><strong>Gonderilmeyen alan</strong></td>
+          <td>null / varsayilan olur</td>
+          <td><strong>Mevcut degeri korur</strong></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>14.2 Altin Kural: Entity'yi Controller'da KULLANMA!</h3>
+
+  <div class="concept-box">
+    <h4>Entity vs DTO Kurali</h4>
+    <p>Entity'yi dogrudan JSON'a baglamak guvenlik acigi olusturur. Kullanici ID, createdAt gibi alanlari degistirebilir. Her zaman DTO kullanin.</p>
+  </div>
+
+  <div class="bad-practice">
+    <h4>YANLIS -- Entity'yi dogrudan JSON'a baglamak</h4>
+<pre><code class="language-java">@PutMapping("/{id}")
+public void update(@PathVariable Long id, @RequestBody Product product) {
+    // product DETACHED! Persistence Context'te degil!
+    // Guvenlik acigi: Kullanici ID, createdAt gibi alanlari degistirebilir!
+    productRepository.save(product);  // Tehlikeli!
+}</code></pre>
+  </div>
+
+  <div class="good-practice">
+    <h4>DOGRU -- DTO kullan</h4>
+<pre><code class="language-java">@PutMapping("/{id}")
+public ResponseEntity&lt;Void&gt; update(@PathVariable Long id,
+                                   @Valid @RequestBody ProductPutDTO dto) {
+    productService.updateProduct(id, dto);
+    return ResponseEntity.noContent().build();
+}</code></pre>
+  </div>
+
+  <h3>14.3 PUT Islemi (Tam Degistirme)</h3>
+
+<pre><code class="language-java">// DTO
+public class ProductPutDTO {
+    @NotBlank
+    private String name;
+    @NotNull
+    private BigDecimal price;
+    private String description;  // null gelebilir -- PUT'ta sorun degil
+    @NotNull
+    private String category;
+    // Getter/Setter...
+}
+
+// Servis
+@Service
+public class ProductService {
+
+    @Autowired
+    private ProductRepository repository;
+
+    @Transactional
+    public void updateProductPut(Long id, ProductPutDTO dto) {
+        // 1. Fetch -- Nesne MANAGED olur
+        Product product = repository.findById(id)
+            .orElseThrow(() -&gt; new ResourceNotFoundException("Urun bulunamadi: " + id));
+
+        // 2. Tum alanlari ezerek yaz (overwrite)
+        product.setName(dto.getName());
+        product.setPrice(dto.getPrice());
+        product.setDescription(dto.getDescription());  // null geldiyse DB'de de null olur
+        product.setCategory(dto.getCategory());
+
+        // 3. save() YOK -- Managed Entity, Dirty Checking yapacak
+    }
+}</code></pre>
+
+  <div class="tip-box">
+    <p><strong>Ipucu:</strong> PUT isleminde <code>save()</code> cagrisi yapmaniza gerek yoktur. Entity managed durumda oldugu icin Dirty Checking mekanizmasi degisiklikleri otomatik olarak veritabanina yansitir.</p>
+  </div>
+
+  <h3>14.4 PATCH Islemi -- Yontem 1: Map&lt;String, Object&gt;</h3>
+
+  <div class="concept-box">
+    <h4>Map Yaklasimi</h4>
+    <p>"Gonderilmeyen alan" ile "null gonderilen alan" ayrimini yapmanin en basit yolu Map kullanmaktir. JSON'da gonderilen anahtarlari <code>containsKey()</code> ile kontrol edersiniz.</p>
+  </div>
+
+<pre><code class="language-java">// Controller
+@PatchMapping("/{id}")
+public ResponseEntity&lt;Void&gt; patch(@PathVariable Long id,
+                                  @RequestBody Map&lt;String, Object&gt; updates) {
+    productService.patchProduct(id, updates);
+    return ResponseEntity.noContent().build();
+}
+
+// Servis
+@Service
+public class ProductService {
+
+    @Transactional
+    public void patchProduct(Long id, Map&lt;String, Object&gt; updates) {
+        Product product = repository.findById(id).orElseThrow();
+
+        // Sadece JSON'da GONDERILEN anahtarlari guncelle
+        if (updates.containsKey("name")) {
+            product.setName((String) updates.get("name"));
+        }
+        if (updates.containsKey("price")) {
+            product.setPrice(new BigDecimal(updates.get("price").toString()));
+        }
+        if (updates.containsKey("description")) {
+            product.setDescription((String) updates.get("description"));
+            // null geldiyse: client bilerek temizlemek istiyor -- DB'de null olur
+        }
+        if (updates.containsKey("category")) {
+            product.setCategory((String) updates.get("category"));
+        }
+
+        // save() YOK -- Managed Entity
+    }
+}</code></pre>
+
+  <h3>14.5 PATCH Islemi -- Yontem 2: DTO + Tip Guvenligi</h3>
+
+<pre><code class="language-java">// PATCH DTO -- Tum alanlar nullable
+public class ProductPatchDTO {
+    private String name;         // null = gonderilmedi
+    private BigDecimal price;    // null = gonderilmedi
+    private String description;
+    private String category;
+    // Getter/Setter...
+}
+
+// Servis -- null olan alanlara dokunma
+@Transactional
+public void patchProductWithDto(Long id, ProductPatchDTO dto) {
+    Product product = repository.findById(id).orElseThrow();
+
+    if (dto.getName() != null) {
+        product.setName(dto.getName());
+    }
+    if (dto.getPrice() != null) {
+        product.setPrice(dto.getPrice());
+    }
+    if (dto.getDescription() != null) {
+        product.setDescription(dto.getDescription());
+    }
+    if (dto.getCategory() != null) {
+        product.setCategory(dto.getCategory());
+    }
+
+    // KISITLAMA: Bu yaklasimda client bir alani bilerek null yapamaz!
+    // Cunku null = "gonderilmedi" ile null = "temizle" ayrimi yapilamiyor.
+}</code></pre>
+
+  <div class="warning-box">
+    <p><strong>Uyari:</strong> DTO + Tip Guvenligi yonteminde onemli bir kisitlama vardir: Client bir alani bilerek <code>null</code> yapamaz. Cunku <code>null = "gonderilmedi"</code> ile <code>null = "temizle"</code> ayrimi yapilamaz. Bu sorunu cozmek icin <strong>JsonNullable</strong> kullanin (Bolum 15.3).</p>
+  </div>
+
+  <div class="quiz-container" data-section="14">
+    <h3 class="quiz-title">Bilgi Kontrolu</h3>
+    <div class="quiz-question" data-correct="B">
+      <p class="question-text">1. PUT ve PATCH arasindaki temel fark nedir?</p>
+      <div class="quiz-options">
+        <button class="quiz-option" data-value="A">A) PUT sadece yeni kayit olusturur, PATCH gunceller</button>
+        <button class="quiz-option" data-value="B">B) PUT tum alanlari degistirir, PATCH sadece gonderilen alanlari gunceller</button>
+        <button class="quiz-option" data-value="C">C) PUT daha hizlidir, PATCH daha yavas calisir</button>
+      </div>
+      <div class="quiz-feedback correct-feedback">&#10003; Dogru! PUT "gonderdigimle tamamen degistir" anlamina gelirken, PATCH "sadece gonderdigim alanlari guncelle" anlamina gelir.</div>
+      <div class="quiz-feedback incorrect-feedback">&#10007; Yanlis. Dogru cevap B: PUT tum alanlari ezerek yazar (gonderilmeyen alanlar null olur), PATCH ise sadece gonderilen alanlari gunceller ve diger alanlara dokunmaz.</div>
+    </div>
+    <div class="quiz-question" data-correct="C">
+      <p class="question-text">2. Controller'da Entity yerine neden DTO kullanilmalidir?</p>
+      <div class="quiz-options">
+        <button class="quiz-option" data-value="A">A) DTO'lar daha hizli serilesetirilir</button>
+        <button class="quiz-option" data-value="B">B) Entity'ler JSON formatini desteklemez</button>
+        <button class="quiz-option" data-value="C">C) Entity dogrudan baglama guvenlik acigi olusturur; kullanici ID, createdAt gibi alanlari degistirebilir</button>
+      </div>
+      <div class="quiz-feedback correct-feedback">&#10003; Dogru! Entity'yi dogrudan JSON'a baglamak, kullanicinin ID, createdAt gibi hassas alanlari degistirmesine olanak tanir. DTO kullanarak hangi alanlarin guncellenebilecegini kontrol edersiniz.</div>
+      <div class="quiz-feedback incorrect-feedback">&#10007; Yanlis. Dogru cevap C: Entity'yi dogrudan JSON'a baglamak guvenlik acigi olusturur. Kullanici ID, createdAt gibi alanlari degistirebilir ve Entity DETACHED durumda olur.</div>
+    </div>
+    <div class="quiz-question" data-correct="A">
+      <p class="question-text">3. Managed Entity guncellendiginde neden save() cagrisina gerek yoktur?</p>
+      <div class="quiz-options">
+        <button class="quiz-option" data-value="A">A) Dirty Checking mekanizmasi degisiklikleri otomatik algilar ve UPDATE sorgusu olusturur</button>
+        <button class="quiz-option" data-value="B">B) Spring Boot otomatik kaydetme ozelligi vardir</button>
+        <button class="quiz-option" data-value="C">C) @Transactional anotasyonu save() islevini yerine getirir</button>
+      </div>
+      <div class="quiz-feedback correct-feedback">&#10003; Dogru! Managed durumundaki Entity'ler icin Hibernate'in Dirty Checking mekanizmasi, transaction sonunda degisiklikleri otomatik olarak veritabanina yansitir.</div>
+      <div class="quiz-feedback incorrect-feedback">&#10007; Yanlis. Dogru cevap A: Dirty Checking mekanizmasi, Persistence Context'teki managed Entity'lerin degisikliklerini otomatik olarak algilar ve transaction commit sirasinda UPDATE sorgusu olusturur.</div>
+    </div>
+  </div>
+</section>
+
+<!-- Section 15: DTO Mapping Araclari -->
+<section class="tutorial-section" id="section-15" data-section="15">
+  <h2 class="section-title"><span class="section-number">15</span> DTO Mapping Araclari: MapStruct, Jackson, JsonNullable</h2>
+
+  <div class="concept-box">
+    <h4>Neden DTO Mapping Araci?</h4>
+    <p>30-40 alanli Entity'lerde elle <code>set/get</code> yazmak surdurulebilir degildir. Sektor bu boilerplate'i MapStruct, Jackson ve JsonNullable gibi araclarla cozer.</p>
+  </div>
+
+  <h3>15.1 MapStruct (Sektor Standardi)</h3>
+
+  <p>MapStruct derleme zamaninda (compile-time) calisir, reflection kullanmaz, cok hizlidir.</p>
+
+  <h4>Maven Bagimliligi</h4>
+
+<pre><code class="language-xml">&lt;dependency&gt;
+    &lt;groupId&gt;org.mapstruct&lt;/groupId&gt;
+    &lt;artifactId&gt;mapstruct&lt;/artifactId&gt;
+    &lt;version&gt;1.5.5.Final&lt;/version&gt;
+&lt;/dependency&gt;
+&lt;dependency&gt;
+    &lt;groupId&gt;org.mapstruct&lt;/groupId&gt;
+    &lt;artifactId&gt;mapstruct-processor&lt;/artifactId&gt;
+    &lt;version&gt;1.5.5.Final&lt;/version&gt;
+    &lt;scope&gt;provided&lt;/scope&gt;
+&lt;/dependency&gt;</code></pre>
+
+  <h4>Mapper Arayuzu</h4>
+
+<pre><code class="language-java">import org.mapstruct.*;
+
+@Mapper(componentModel = "spring")
+public interface ProductMapper {
+
+    // Entity -&gt; DTO donusumu (Okuma icin)
+    ProductResponseDTO toResponseDto(Product entity);
+
+    // DTO -&gt; Entity (Yeni kayit olusturma icin)
+    Product toEntity(ProductCreateDTO dto);
+
+    // PUT: DTO'daki HER SEYI Entity'nin uzerine yazar (null dahil)
+    void updateFromPutDto(ProductPutDTO dto, @MappingTarget Product entity);
+
+    // PATCH: DTO'daki null olan alanlari ATLA, sadece dolu olanlari guncelle
+    @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
+    void updateFromPatchDto(ProductPatchDTO dto, @MappingTarget Product entity);
+}</code></pre>
+
+  <div class="concept-box">
+    <h4>@MappingTarget Anotasyonu</h4>
+    <p><code>@MappingTarget</code> ile isaretlenen parametre, MapStruct'in uzerine yazacagi hedef nesnedir. Bu sayede mevcut bir Entity'yi DTO'daki degerlerle guncelleyebilirsiniz.</p>
+  </div>
+
+  <div class="concept-box">
+    <h4>NullValuePropertyMappingStrategy.IGNORE</h4>
+    <p>PATCH islemlerinde <code>@BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)</code> kullanarak, DTO'daki null olan alanlar Entity'ye yazilmaz. Boylece sadece gonderilen alanlar guncellenir.</p>
+  </div>
+
+  <h4>Servis Kullanimi (Boilerplate Sifir!)</h4>
+
+<pre><code class="language-java">@Service
+public class ProductService {
+
+    @Autowired private ProductRepository repository;
+    @Autowired private ProductMapper mapper;
+
+    // PUT
+    @Transactional
+    public void putProduct(Long id, ProductPutDTO dto) {
+        Product product = repository.findById(id).orElseThrow();
+        mapper.updateFromPutDto(dto, product);
+        // Tum alanlar ezildi. Dirty Checking UPDATE atacak.
+    }
+
+    // PATCH
+    @Transactional
+    public void patchProduct(Long id, ProductPatchDTO dto) {
+        Product product = repository.findById(id).orElseThrow();
+        mapper.updateFromPatchDto(dto, product);
+        // Sadece null OLMAYAN alanlar guncellendi.
+    }
+}</code></pre>
+
+  <h3>15.2 Jackson readerForUpdating (DTO'suz PATCH)</h3>
+
+<pre><code class="language-java">@Service
+public class ProductService {
+
+    @Autowired private ProductRepository repository;
+    @Autowired private ObjectMapper objectMapper;  // Spring Boot otomatik saglar
+
+    @Transactional
+    public void patchProduct(Long id, JsonNode patchJson) throws IOException {
+        Product product = repository.findById(id).orElseThrow();
+
+        // JSON'daki alanlari dogrudan Entity'nin uzerine "yamala"
+        objectMapper.readerForUpdating(product).readValue(patchJson);
+
+        // Dirty Checking devreye girer, UPDATE atar.
+    }
+}
+
+// Controller
+@PatchMapping("/{id}")
+public ResponseEntity&lt;Void&gt; patch(@PathVariable Long id,
+                                  @RequestBody JsonNode patchJson) throws IOException {
+    productService.patchProduct(id, patchJson);
+    return ResponseEntity.noContent().build();
+}</code></pre>
+
+  <div class="warning-box">
+    <p><strong>Guvenlik Uyarisi:</strong> Bu yontemde Entity dogrudan JSON'a acilir. <code>@JsonIgnore</code> veya <code>@JsonProperty(access = READ_ONLY)</code> ile hassas alanlari (id, createdAt, role) koruyun.</p>
+  </div>
+
+  <h3>15.3 JsonNullable (Gercek RESTful PATCH)</h3>
+
+  <div class="concept-box">
+    <h4>JsonNullable Nedir?</h4>
+    <p>"Gonderilmedi" ile "bilerek null yapti" ayrimini yapar. Uc durumu ifade eder: <code>undefined()</code> (JSON'da alan yok -- dokunma), <code>of("deger")</code> (JSON'da deger var -- guncelle), <code>of(null)</code> (JSON'da alan var ama degeri null -- null yap).</p>
+  </div>
+
+  <h4>Maven Bagimliligi</h4>
+
+<pre><code class="language-xml">&lt;dependency&gt;
+    &lt;groupId&gt;org.openapitools&lt;/groupId&gt;
+    &lt;artifactId&gt;jackson-databind-nullable&lt;/artifactId&gt;
+    &lt;version&gt;0.2.6&lt;/version&gt;
+&lt;/dependency&gt;</code></pre>
+
+  <h4>DTO Tanimi</h4>
+
+<pre><code class="language-java">import org.openapitools.jackson.nullable.JsonNullable;
+
+public class ProductPatchDTO {
+
+    // JsonNullable 3 durumu ifade eder:
+    // 1. undefined() -&gt; JSON'da bu alan YOK (dokunma)
+    // 2. of("deger")  -&gt; JSON'da deger var (guncelle)
+    // 3. of(null)     -&gt; JSON'da alan var ama degeri null (null yap)
+    private JsonNullable&lt;String&gt; name = JsonNullable.undefined();
+    private JsonNullable&lt;BigDecimal&gt; price = JsonNullable.undefined();
+    private JsonNullable&lt;String&gt; description = JsonNullable.undefined();
+
+    // Getter/Setter...
+}</code></pre>
+
+  <h4>Servis</h4>
+
+<pre><code class="language-java">@Transactional
+public void patchProduct(Long id, ProductPatchDTO dto) {
+    Product product = repository.findById(id).orElseThrow();
+
+    // isPresent(): JSON'da bu anahtar var mi? (null olsa bile true doner)
+    if (dto.getName().isPresent()) {
+        product.setName(dto.getName().get());  // null da olabilir
+    }
+    if (dto.getPrice().isPresent()) {
+        product.setPrice(dto.getPrice().get());
+    }
+    if (dto.getDescription().isPresent()) {
+        product.setDescription(dto.getDescription().get());
+    }
+}</code></pre>
+
+  <h4>JSON Ornekleri</h4>
+
+<pre><code class="language-json">// Ismi guncelle, aciklamayi null yap, fiyata dokunma
+{ "name": "Yeni Isim", "description": null }
+// -&gt; name.isPresent() = true, name.get() = "Yeni Isim"
+// -&gt; description.isPresent() = true, description.get() = null
+// -&gt; price.isPresent() = false (dokunulmaz)</code></pre>
+
+  <div class="tip-box">
+    <p><strong>Ipucu:</strong> JsonNullable, gercek RESTful PATCH semantigi icin en dogru cozumdur. <code>isPresent()</code> metodu JSON'da anahtarin var olup olmadigini kontrol eder -- deger <code>null</code> olsa bile <code>true</code> doner. Bu sayede "gonderilmedi" ile "bilerek null yapti" ayrimi net bir sekilde yapilabilir.</p>
+  </div>
+
+  <div class="quiz-container" data-section="15">
+    <h3 class="quiz-title">Bilgi Kontrolu</h3>
+    <div class="quiz-question" data-correct="A">
+      <p class="question-text">1. MapStruct'in en buyuk avantaji nedir?</p>
+      <div class="quiz-options">
+        <button class="quiz-option" data-value="A">A) Derleme zamaninda calisir, reflection kullanmaz ve cok hizlidir</button>
+        <button class="quiz-option" data-value="B">B) Calisma zamaninda dinamik mapping yapar</button>
+        <button class="quiz-option" data-value="C">C) JSON serializasyon icin en iyi aractir</button>
+      </div>
+      <div class="quiz-feedback correct-feedback">&#10003; Dogru! MapStruct compile-time'da kod uretir, reflection kullanmaz ve bu sayede calisma zamaninda cok hizli calisir.</div>
+      <div class="quiz-feedback incorrect-feedback">&#10007; Yanlis. Dogru cevap A: MapStruct derleme zamaninda (compile-time) calisir, reflection kullanmaz ve bu sayede cok hizli ve tip guvenli mapping saglar.</div>
+    </div>
+    <div class="quiz-question" data-correct="C">
+      <p class="question-text">2. JsonNullable'in cozdugu temel problem nedir?</p>
+      <div class="quiz-options">
+        <button class="quiz-option" data-value="A">A) JSON parse performansini arttirir</button>
+        <button class="quiz-option" data-value="B">B) Null pointer exception'lari onler</button>
+        <button class="quiz-option" data-value="C">C) "Gonderilmedi" (undefined) ile "bilerek null yapti" ayrimini yapar</button>
+      </div>
+      <div class="quiz-feedback correct-feedback">&#10003; Dogru! JsonNullable uc durumu ayirt eder: undefined (alan gonderilmedi), of(deger) (deger var) ve of(null) (bilerek null yapildi).</div>
+      <div class="quiz-feedback incorrect-feedback">&#10007; Yanlis. Dogru cevap C: JsonNullable'in temel amaci PATCH islemlerinde "JSON'da alan yok" ile "JSON'da alan var ama degeri null" durumlarini birbirinden ayirmaktir.</div>
+    </div>
+    <div class="quiz-question" data-correct="B">
+      <p class="question-text">3. Jackson readerForUpdating yontemi kullanildiginda hangi guvenlik onlemi alinmalidir?</p>
+      <div class="quiz-options">
+        <button class="quiz-option" data-value="A">A) SSL sertifikasi eklenmelidir</button>
+        <button class="quiz-option" data-value="B">B) @JsonIgnore veya @JsonProperty(access = READ_ONLY) ile hassas alanlar korunmalidir</button>
+        <button class="quiz-option" data-value="C">C) Ayri bir veritabani kullanicisi olusturulmalidir</button>
+      </div>
+      <div class="quiz-feedback correct-feedback">&#10003; Dogru! Entity dogrudan JSON'a acildigi icin id, createdAt, role gibi hassas alanlari @JsonIgnore veya @JsonProperty(access = READ_ONLY) ile korumak gerekir.</div>
+      <div class="quiz-feedback incorrect-feedback">&#10007; Yanlis. Dogru cevap B: Entity dogrudan JSON'a acildigi icin @JsonIgnore veya @JsonProperty(access = READ_ONLY) ile hassas alanlarin (id, createdAt, role) degistirilmesi engellenmelidir.</div>
+    </div>
+  </div>
+</section>
+
+<!-- Section 16: Sık Yapılan Hatalar ve Çözümleri -->
+<section class="tutorial-section" id="section-16" data-section="16">
+  <h2 class="section-title"><span class="section-number">16</span> Sık Yapılan Hatalar ve Çözümleri</h2>
+
+  <h3>16.1 N+1 Güncelleme Problemi</h3>
+
+  <div class="bad-practice">
+    <h4>❌ Yanlış</h4>
+    <p>Her kayıt için ayrı UPDATE sorgusu (1000 kayıt = 1000 sorgu)</p>
+    <pre><code class="language-java">@Transactional
+public void giveRaise(String department) {
+    List&lt;Employee&gt; employees = employeeRepository.findByDepartment(department);
+    for (Employee emp : employees) {
+        emp.setSalary(emp.getSalary().multiply(new BigDecimal("1.10")));
+        // Hibernate her biri icin ayri UPDATE atar!
+    }
+}</code></pre>
+  </div>
+
+  <div class="good-practice">
+    <h4>✅ Doğru</h4>
+    <p>Tek sorgu ile toplu güncelleme</p>
+    <pre><code class="language-java">@Modifying
+@Query("UPDATE Employee e SET e.salary = e.salary * 1.10 WHERE e.department = :dept")
+int bulkRaise(@Param("dept") String department);
+// 1000 kayit olsa bile tek bir UPDATE sorgusu calisir.</code></pre>
+  </div>
+
+  <h3>16.2 N+1 SELECT Problemi (Lazy Loading Tuzağı)</h3>
+
+  <div class="bad-practice">
+    <h4>❌ Yanlış</h4>
+    <p>Entity'de varsayılan Lazy Loading ile döngüde erişim</p>
+    <pre><code class="language-java">@OneToMany(mappedBy = "order", fetch = FetchType.LAZY)
+private List&lt;OrderItem&gt; items;
+
+// Kodda:
+List&lt;Order&gt; orders = orderRepository.findAll();  // 1 SELECT
+for (Order order : orders) {
+    order.getItems().size();  // Her siparis icin 1 SELECT daha!
+    // 100 siparis = 1 + 100 = 101 sorgu!
+}</code></pre>
+  </div>
+
+  <div class="good-practice">
+    <h4>✅ Doğru — Çözüm 1: JOIN FETCH</h4>
+    <p>Tek sorguda ilişkili verileri getir</p>
+    <pre><code class="language-java">@Query("SELECT o FROM Order o JOIN FETCH o.items WHERE o.status = :status")
+List&lt;Order&gt; findWithItems(@Param("status") String status);</code></pre>
+  </div>
+
+  <div class="good-practice">
+    <h4>✅ Doğru — Çözüm 2: @EntityGraph</h4>
+    <pre><code class="language-java">@EntityGraph(attributePaths = {"items"})
+List&lt;Order&gt; findByStatus(String status);</code></pre>
+  </div>
+
+  <div class="good-practice">
+    <h4>✅ Doğru — Çözüm 3: DTO Projection (En iyisi)</h4>
+    <p>Entity değil, sadece ihtiyacın olanı çek</p>
+    <pre><code class="language-java">@Query("SELECT new com.example.dto.OrderSummary(o.id, o.status, SIZE(o.items)) " +
+       "FROM Order o WHERE o.status = :status")
+List&lt;OrderSummary&gt; findSummariesByStatus(@Param("status") String status);</code></pre>
+  </div>
+
+  <h3>16.3 Büyük Veri Setlerini Managed Olarak Çekmek (Bellek Tükenmesi)</h3>
+
+  <div class="bad-practice">
+    <h4>❌ Yanlış</h4>
+    <p>50.000 kaydı Managed olarak çekmek</p>
+    <pre><code class="language-java">@Transactional
+public void processAllProducts() {
+    List&lt;Product&gt; all = productRepository.findAll();
+    // 50.000 Entity + 50.000 Snapshot = 100.000 nesne RAM'de!
+    // OutOfMemoryError riski!
+}</code></pre>
+  </div>
+
+  <div class="good-practice">
+    <h4>✅ Doğru — Çözüm 1: readOnly</h4>
+    <p>Salt okunur işlemler için readOnly kullan</p>
+    <pre><code class="language-java">@Transactional(readOnly = true)
+public List&lt;Product&gt; getAllProducts() {
+    return productRepository.findAll();
+    // readOnly = true: Snapshot alinmaz -> Bellek yariya iner
+}</code></pre>
+  </div>
+
+  <div class="good-practice">
+    <h4>✅ Doğru — Çözüm 2: DTO Projection (En iyi çözüm)</h4>
+    <pre><code class="language-java">@Query("SELECT new com.example.dto.ProductSummary(p.id, p.name, p.price) FROM Product p")
+List&lt;ProductSummary&gt; findAllSummaries();
+// DTO'lar MANAGED olmaz. Snapshot alinmaz. Minimum bellek kullanir.</code></pre>
+  </div>
+
+  <div class="good-practice">
+    <h4>✅ Doğru — Çözüm 3: Sayfalama (Pagination)</h4>
+    <pre><code class="language-java">Page&lt;Product&gt; products = productRepository.findAll(PageRequest.of(0, 50));</code></pre>
+  </div>
+
+  <h3>16.4 Detached Entity'yi Güncellemeye Çalışmak</h3>
+
+  <div class="bad-practice">
+    <h4>❌ Yanlış</h4>
+    <p>Controller'dan gelen Entity DETACHED durumda</p>
+    <pre><code class="language-java">@PostMapping("/update")
+public void update(@RequestBody Product product) {
+    product.setPrice(new BigDecimal("999"));
+    // Bu degisiklik DB'ye YANSIMAZ! product Detached.
+    // productRepository.save(product) yazsan bile merge() calisir ki
+    // bu da guvenlik acigi olabilir (client tum alanlari kontrol eder).
+}</code></pre>
+  </div>
+
+  <div class="good-practice">
+    <h4>✅ Doğru</h4>
+    <p>Fetch-Update deseni kullan</p>
+    <pre><code class="language-java">@Transactional
+public void updatePrice(Long id, BigDecimal newPrice) {
+    Product product = productRepository.findById(id).orElseThrow();  // MANAGED
+    product.setPrice(newPrice);
+    // Dirty Checking -> UPDATE
+}</code></pre>
+  </div>
+
+  <div class="quiz-container" data-section="16">
+    <h3 class="quiz-title">Bilgi Kontrolü</h3>
+    <div class="quiz-question" data-correct="B">
+      <p class="question-text">1. N+1 güncelleme probleminin çözümü nedir?</p>
+      <div class="quiz-options">
+        <button class="quiz-option" data-value="A">A) Her entity için ayrı ayrı save() çağırmak</button>
+        <button class="quiz-option" data-value="B">B) @Modifying @Query ile tek bir bulk UPDATE sorgusu yazmak</button>
+        <button class="quiz-option" data-value="C">C) FetchType.EAGER kullanmak</button>
+      </div>
+      <div class="quiz-feedback correct-feedback">✓ Doğru! Tek bir bulk UPDATE sorgusu ile 1000 kayıt bile tek sorguda güncellenir.</div>
+      <div class="quiz-feedback incorrect-feedback">✗ Yanlış. Doğru cevap: B) @Modifying @Query ile tek bir bulk UPDATE sorgusu yazılmalıdır.</div>
+    </div>
+    <div class="quiz-question" data-correct="C">
+      <p class="question-text">2. N+1 SELECT problemini çözmek için en iyi yöntem hangisidir?</p>
+      <div class="quiz-options">
+        <button class="quiz-option" data-value="A">A) FetchType.EAGER kullanmak</button>
+        <button class="quiz-option" data-value="B">B) Tüm verileri tek seferde belleğe yüklemek</button>
+        <button class="quiz-option" data-value="C">C) DTO Projection ile sadece ihtiyaç duyulan verileri çekmek</button>
+      </div>
+      <div class="quiz-feedback correct-feedback">✓ Doğru! DTO Projection en iyi çözümdür — Entity değil, sadece ihtiyacınız olan alanları çeker.</div>
+      <div class="quiz-feedback incorrect-feedback">✗ Yanlış. Doğru cevap: C) DTO Projection — en iyi çözüm olarak önerilmektedir.</div>
+    </div>
+    <div class="quiz-question" data-correct="A">
+      <p class="question-text">3. Detached bir entity üzerinde yapılan değişiklik neden veritabanına yansımaz?</p>
+      <div class="quiz-options">
+        <button class="quiz-option" data-value="A">A) Persistence Context tarafından izlenmediği için Dirty Checking çalışmaz</button>
+        <button class="quiz-option" data-value="B">B) @Transactional anotasyonu eksik olduğu için</button>
+        <button class="quiz-option" data-value="C">C) Entity'nin primary key'i olmadığı için</button>
+      </div>
+      <div class="quiz-feedback correct-feedback">✓ Doğru! Detached entity, Persistence Context dışındadır ve Dirty Checking tarafından izlenmez.</div>
+      <div class="quiz-feedback incorrect-feedback">✗ Yanlış. Doğru cevap: A) Detached entity Persistence Context dışında olduğu için Dirty Checking çalışmaz.</div>
+    </div>
+  </div>
+</section>
+
+<!-- Section 17: Proje Kurulumu (Spring Boot) -->
+<section class="tutorial-section" id="section-17" data-section="17">
+  <h2 class="section-title"><span class="section-number">17</span> Proje Kurulumu (Spring Boot)</h2>
+
+  <h3>17.1 Maven Bagimliliklari (pom.xml)</h3>
+
+<pre><code class="language-xml">&lt;?xml version="1.0" encoding="UTF-8"?&gt;
+&lt;project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+         https://maven.apache.org/xsd/maven-4.0.0.xsd"&gt;
+    &lt;modelVersion&gt;4.0.0&lt;/modelVersion&gt;
+
+    &lt;parent&gt;
+        &lt;groupId&gt;org.springframework.boot&lt;/groupId&gt;
+        &lt;artifactId&gt;spring-boot-starter-parent&lt;/artifactId&gt;
+        &lt;version&gt;3.3.0&lt;/version&gt;
+    &lt;/parent&gt;
+
+    &lt;groupId&gt;com.example&lt;/groupId&gt;
+    &lt;artifactId&gt;persistence-tutorial&lt;/artifactId&gt;
+    &lt;version&gt;1.0.0&lt;/version&gt;
+
+    &lt;properties&gt;
+        &lt;java.version&gt;21&lt;/java.version&gt;
+        &lt;mapstruct.version&gt;1.5.5.Final&lt;/mapstruct.version&gt;
+    &lt;/properties&gt;
+
+    &lt;dependencies&gt;
+        &lt;!-- Spring Data JPA (Hibernate dahil gelir) --&gt;
+        &lt;dependency&gt;
+            &lt;groupId&gt;org.springframework.boot&lt;/groupId&gt;
+            &lt;artifactId&gt;spring-boot-starter-data-jpa&lt;/artifactId&gt;
+        &lt;/dependency&gt;
+
+        &lt;!-- Spring Web (REST API) --&gt;
+        &lt;dependency&gt;
+            &lt;groupId&gt;org.springframework.boot&lt;/groupId&gt;
+            &lt;artifactId&gt;spring-boot-starter-web&lt;/artifactId&gt;
+        &lt;/dependency&gt;
+
+        &lt;!-- PostgreSQL Driver --&gt;
+        &lt;dependency&gt;
+            &lt;groupId&gt;org.postgresql&lt;/groupId&gt;
+            &lt;artifactId&gt;postgresql&lt;/artifactId&gt;
+            &lt;scope&gt;runtime&lt;/scope&gt;
+        &lt;/dependency&gt;
+
+        &lt;!-- MapStruct (DTO Mapping) --&gt;
+        &lt;dependency&gt;
+            &lt;groupId&gt;org.mapstruct&lt;/groupId&gt;
+            &lt;artifactId&gt;mapstruct&lt;/artifactId&gt;
+            &lt;version&gt;${mapstruct.version}&lt;/version&gt;
+        &lt;/dependency&gt;
+
+        &lt;!-- JsonNullable (Gercek PATCH destegi) --&gt;
+        &lt;dependency&gt;
+            &lt;groupId&gt;org.openapitools&lt;/groupId&gt;
+            &lt;artifactId&gt;jackson-databind-nullable&lt;/artifactId&gt;
+            &lt;version&gt;0.2.6&lt;/version&gt;
+        &lt;/dependency&gt;
+
+        &lt;!-- jOOQ (Opsiyonel - Karmasik sorgular icin) --&gt;
+        &lt;dependency&gt;
+            &lt;groupId&gt;org.springframework.boot&lt;/groupId&gt;
+            &lt;artifactId&gt;spring-boot-starter-jooq&lt;/artifactId&gt;
+        &lt;/dependency&gt;
+
+        &lt;!-- Hibernate Search (Opsiyonel - Tam metin arama) --&gt;
+        &lt;dependency&gt;
+            &lt;groupId&gt;org.hibernate.search&lt;/groupId&gt;
+            &lt;artifactId&gt;hibernate-search-mapper-orm&lt;/artifactId&gt;
+            &lt;version&gt;7.1.0.Final&lt;/version&gt;
+        &lt;/dependency&gt;
+        &lt;dependency&gt;
+            &lt;groupId&gt;org.hibernate.search&lt;/groupId&gt;
+            &lt;artifactId&gt;hibernate-search-backend-lucene&lt;/artifactId&gt;
+            &lt;version&gt;7.1.0.Final&lt;/version&gt;
+        &lt;/dependency&gt;
+
+        &lt;!-- Validation --&gt;
+        &lt;dependency&gt;
+            &lt;groupId&gt;org.springframework.boot&lt;/groupId&gt;
+            &lt;artifactId&gt;spring-boot-starter-validation&lt;/artifactId&gt;
+        &lt;/dependency&gt;
+
+        &lt;!-- Test --&gt;
+        &lt;dependency&gt;
+            &lt;groupId&gt;org.springframework.boot&lt;/groupId&gt;
+            &lt;artifactId&gt;spring-boot-starter-test&lt;/artifactId&gt;
+            &lt;scope&gt;test&lt;/scope&gt;
+        &lt;/dependency&gt;
+        &lt;dependency&gt;
+            &lt;groupId&gt;com.h2database&lt;/groupId&gt;
+            &lt;artifactId&gt;h2&lt;/artifactId&gt;
+            &lt;scope&gt;test&lt;/scope&gt;
+        &lt;/dependency&gt;
+    &lt;/dependencies&gt;
+
+    &lt;build&gt;
+        &lt;plugins&gt;
+            &lt;plugin&gt;
+                &lt;groupId&gt;org.apache.maven.plugins&lt;/groupId&gt;
+                &lt;artifactId&gt;maven-compiler-plugin&lt;/artifactId&gt;
+                &lt;configuration&gt;
+                    &lt;annotationProcessorPaths&gt;
+                        &lt;path&gt;
+                            &lt;groupId&gt;org.mapstruct&lt;/groupId&gt;
+                            &lt;artifactId&gt;mapstruct-processor&lt;/artifactId&gt;
+                            &lt;version&gt;${mapstruct.version}&lt;/version&gt;
+                        &lt;/path&gt;
+                    &lt;/annotationProcessorPaths&gt;
+                &lt;/configuration&gt;
+            &lt;/plugin&gt;
+        &lt;/plugins&gt;
+    &lt;/build&gt;
+&lt;/project&gt;</code></pre>
+
+  <h3>17.2 application.yml</h3>
+
+<pre><code class="language-yaml">spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/tutorial_db
+    username: postgres
+    password: postgres
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: validate  # Prod'da validate, dev'de update kullanilabilir
+    show-sql: true         # Gelistirmede SQL'leri gor
+    properties:
+      hibernate:
+        format_sql: true
+        default_batch_fetch_size: 16  # N+1 problemi icin batch fetch
+        jdbc:
+          batch_size: 50    # Toplu INSERT/UPDATE optimizasyonu
+
+  # Hibernate Search (Opsiyonel)
+  jpa.properties.hibernate.search:
+    backend:
+      type: lucene
+      directory.root: ./data/search-index</code></pre>
+
+  <div class="tip-box">
+    <p><strong>Ipucu:</strong> Production ortaminda <code>ddl-auto: validate</code> kullanin. Bu ayar, Entity'lerinizin veritabani semasina uygun olup olmadigini kontrol eder ancak semayi degistirmez. Gelistirme ortaminda <code>update</code> kullanabilirsiniz.</p>
+  </div>
+
+  <h3>17.3 Tam Calisan Ornek: Product CRUD API</h3>
+
+  <h4>DTO'lar</h4>
+
+<pre><code class="language-java">public record ProductCreateDTO(
+    @NotBlank String name,
+    @NotNull BigDecimal price,
+    String description,
+    @NotBlank String category
+) {}
+
+public record ProductResponseDTO(
+    Long id,
+    String name,
+    BigDecimal price,
+    String description,
+    String category,
+    LocalDateTime createdAt
+) {}
+
+public record ProductPutDTO(
+    @NotBlank String name,
+    @NotNull BigDecimal price,
+    String description,
+    @NotBlank String category
+) {}</code></pre>
+
+  <h4>Controller</h4>
+
+<pre><code class="language-java">@RestController
+@RequestMapping("/api/products")
+public class ProductController {
+
+    @Autowired private ProductService productService;
+
+    @PostMapping
+    public ResponseEntity&lt;ProductResponseDTO&gt; create(@Valid @RequestBody ProductCreateDTO dto) {
+        ProductResponseDTO created = productService.create(dto);
+        return ResponseEntity.status(HttpStatus.CREATED).body(created);
+    }
+
+    @GetMapping("/{id}")
+    public ProductResponseDTO getById(@PathVariable Long id) {
+        return productService.getById(id);
+    }
+
+    @PutMapping("/{id}")
+    public ResponseEntity&lt;Void&gt; put(@PathVariable Long id,
+                                    @Valid @RequestBody ProductPutDTO dto) {
+        productService.putProduct(id, dto);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PatchMapping("/{id}")
+    public ResponseEntity&lt;Void&gt; patch(@PathVariable Long id,
+                                      @RequestBody Map&lt;String, Object&gt; updates) {
+        productService.patchProduct(id, updates);
+        return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity&lt;Void&gt; delete(@PathVariable Long id) {
+        productService.deleteProduct(id);
+        return ResponseEntity.noContent().build();
+    }
+}</code></pre>
+
+  <h4>Servis</h4>
+
+<pre><code class="language-java">@Service
+public class ProductService {
+
+    @Autowired private ProductRepository repository;
+    @Autowired private ProductMapper mapper;
+
+    @Transactional
+    public ProductResponseDTO create(ProductCreateDTO dto) {
+        Product product = mapper.toEntity(dto);
+        product.setCreatedAt(LocalDateTime.now());
+        product.setStatus(ProductStatus.ACTIVE);
+        Product saved = repository.save(product);  // save() ZORUNLU (yeni kayit)
+        return mapper.toResponseDto(saved);
+    }
+
+    @Transactional(readOnly = true)
+    public ProductResponseDTO getById(Long id) {
+        Product product = repository.findById(id)
+            .orElseThrow(() -&gt; new ResourceNotFoundException("Urun bulunamadi: " + id));
+        return mapper.toResponseDto(product);
+    }
+
+    @Transactional
+    public void putProduct(Long id, ProductPutDTO dto) {
+        Product product = repository.findById(id).orElseThrow();
+        mapper.updateFromPutDto(dto, product);  // Tum alanlar ezilir
+        // save() YOK -- Managed Entity
+    }
+
+    @Transactional
+    public void patchProduct(Long id, Map&lt;String, Object&gt; updates) {
+        Product product = repository.findById(id).orElseThrow();
+
+        if (updates.containsKey("name")) {
+            product.setName((String) updates.get("name"));
+        }
+        if (updates.containsKey("price")) {
+            product.setPrice(new BigDecimal(updates.get("price").toString()));
+        }
+        if (updates.containsKey("description")) {
+            product.setDescription((String) updates.get("description"));
+        }
+        if (updates.containsKey("category")) {
+            product.setCategory((String) updates.get("category"));
+        }
+        // save() YOK -- Managed Entity
+    }
+
+    @Transactional
+    public void deleteProduct(Long id) {
+        Product product = repository.findById(id).orElseThrow();
+        repository.delete(product);
+    }
+}</code></pre>
+
+  <div class="concept-box">
+    <h4>Altin Kural: Fetch - Update - Let Dirty Checking Handle It</h4>
+    <p>Yani: Getir - Guncelle - Hibernate'e birak. Managed Entity'lerde <code>save()</code> cagirmak gereksizdir; Dirty Checking degisiklikleri otomatik olarak veritabanina yansitir. Ancak yeni kayit olustururken <code>save()</code> zorunludur.</p>
+  </div>
+
+  <h3>Ozet: Hangi Araci Ne Zaman Kullan?</h3>
+
+  <table class="info-table">
+    <thead>
+      <tr>
+        <th>Senaryo</th>
+        <th>Arac</th>
+        <th>Sebep</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Basit CRUD</td>
+        <td>Spring Data JPA</td>
+        <td>Minimum kod, otomatik sorgular</td>
+      </tr>
+      <tr>
+        <td>Karmasik okuma/rapor</td>
+        <td>jOOQ</td>
+        <td>Tip guvenli SQL, tam kontrol</td>
+      </tr>
+      <tr>
+        <td>Toplu guncelleme</td>
+        <td>@Modifying JPQL veya jOOQ</td>
+        <td>N+1 problemini onler</td>
+      </tr>
+      <tr>
+        <td>DDD / Sihirsiz yaklasim</td>
+        <td>Spring Data JDBC</td>
+        <td>Persistence Context yok, acik ve net</td>
+      </tr>
+      <tr>
+        <td>Tam metin arama</td>
+        <td>Hibernate Search</td>
+        <td>Google benzeri fuzzy arama</td>
+      </tr>
+      <tr>
+        <td>Reaktif uygulama</td>
+        <td>Spring Data R2DBC</td>
+        <td>Non-blocking IO</td>
+      </tr>
+      <tr>
+        <td>DTO Mapping</td>
+        <td>MapStruct</td>
+        <td>Derleme zamani, hizli, guvenli</td>
+      </tr>
+      <tr>
+        <td>Gercek PATCH destegi</td>
+        <td>JsonNullable</td>
+        <td>null vs undefined ayrimi</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="quiz-container" data-section="17">
+    <h3 class="quiz-title">Bilgi Kontrolu</h3>
+    <div class="quiz-question" data-correct="B">
+      <p class="question-text">1. Spring Boot projesinde MapStruct'i kullanmak icin maven-compiler-plugin'de ne yapilandirmak gerekir?</p>
+      <div class="quiz-options">
+        <button class="quiz-option" data-value="A">A) Maven Shade Plugin eklenmeli</button>
+        <button class="quiz-option" data-value="B">B) annotationProcessorPaths icinde mapstruct-processor tanimlanmali</button>
+        <button class="quiz-option" data-value="C">C) Sadece mapstruct dependency eklemek yeterlidir</button>
+      </div>
+      <div class="quiz-feedback correct-feedback">&#10003; Dogru! MapStruct derleme zamaninda kod uretir, bu nedenle maven-compiler-plugin icinde annotationProcessorPaths yapilandirmasinda mapstruct-processor tanimlanmalidir.</div>
+      <div class="quiz-feedback incorrect-feedback">&#10007; Yanlis. Dogru cevap B: MapStruct bir annotation processor oldugu icin maven-compiler-plugin icerisinde annotationProcessorPaths ile mapstruct-processor tanimlanmalidir.</div>
+    </div>
+    <div class="quiz-question" data-correct="A">
+      <p class="question-text">2. Production ortaminda hibernate ddl-auto icin hangi deger kullanilmalidir?</p>
+      <div class="quiz-options">
+        <button class="quiz-option" data-value="A">A) validate</button>
+        <button class="quiz-option" data-value="B">B) update</button>
+        <button class="quiz-option" data-value="C">C) create-drop</button>
+      </div>
+      <div class="quiz-feedback correct-feedback">&#10003; Dogru! Production ortaminda <code>validate</code> kullanilmalidir. Bu ayar Entity'lerin veritabani semasina uygunlugunu dogrular ancak semayi degistirmez.</div>
+      <div class="quiz-feedback incorrect-feedback">&#10007; Yanlis. Dogru cevap A: Production'da <code>validate</code> kullanilmalidir. <code>update</code> gelistirme ortami icin uygundur, <code>create-drop</code> ise sadece test icin kullanilir.</div>
+    </div>
+    <div class="quiz-question" data-correct="C">
+      <p class="question-text">3. Yeni bir Entity kaydederken neden save() cagrisi zorunludur?</p>
+      <div class="quiz-options">
+        <button class="quiz-option" data-value="A">A) Dirty Checking yeni nesneleri desteklemez</button>
+        <button class="quiz-option" data-value="B">B) Spring Data JPA'nin bir kisitlamasidir</button>
+        <button class="quiz-option" data-value="C">C) Yeni nesne henuz Persistence Context'te degildir ve managed duruma gecmesi icin save()/persist() gerekir</button>
+      </div>
+      <div class="quiz-feedback correct-feedback">&#10003; Dogru! Yeni olusturulan nesneler transient durumdadir ve Persistence Context'te degildir. save() veya persist() cagrisi ile managed duruma gecirilmeleri gerekir.</div>
+      <div class="quiz-feedback incorrect-feedback">&#10007; Yanlis. Dogru cevap C: Yeni nesneler transient durumda olup Persistence Context'e dahil degildir. Managed duruma gecmeleri ve INSERT sorgusunun olusturulmasi icin save()/persist() cagrisi gereklidir.</div>
+    </div>
+  </div>
+</section>

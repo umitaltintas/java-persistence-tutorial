@@ -1,0 +1,553 @@
+<!-- Section 21: Entity-First vs Table-First Tasarim -->
+<section class="tutorial-section" id="section-21" data-section="21">
+  <h2 class="section-title"><span class="section-number">21</span> Entity-First vs Table-First Tasarim</h2>
+
+  <div class="concept-box">
+    <h4>Thorben Janssen'in "Unpopular Opinion"i</h4>
+    <p>Thorben: <em>"Once entity mi yoksa tablo mu tasarlanmali? Fark etmez -- bu benim unpopular opinion'im."</em> Gunumuzde cogu uygulamada 1 uygulama + 1 veritabani var ve ikisinin birlikte calismasi lazim. Hangi taraftan baslarsan basla, sonucta her iki tarafi (Java + DB) birbirine uyumlu hale getirmek icin ayarlamalar yapilacak.</p>
+  </div>
+
+  <h3>21.1 Iki Yaklasim</h3>
+
+  <div class="comparison-box">
+    <table class="info-table">
+      <thead>
+        <tr>
+          <th>Ozellik</th>
+          <th>Entity-First</th>
+          <th>Table-First</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Baslangic noktasi</strong></td>
+          <td>Java siniflarini yaz, Hibernate tablo uretsin</td>
+          <td>Oncelikle tablo yapisini tasarla, sonra Entity yaz</td>
+        </tr>
+        <tr>
+          <td><strong>Tablo olusturma</strong></td>
+          <td><code>ddl-auto=update</code> ile otomatik</td>
+          <td>SQL migration scriptleri ile manuel</td>
+        </tr>
+        <tr>
+          <td><strong>Avantaj</strong></td>
+          <td>Hizli prototipleme, Java-odakli dusunme</td>
+          <td>DB performansi ve index kontrolu, DBA uyumlu</td>
+        </tr>
+        <tr>
+          <td><strong>Dezavantaj</strong></td>
+          <td>Uretilen tablolar optimize olmayabilir</td>
+          <td>Daha fazla on tasarim gerektir</td>
+        </tr>
+        <tr>
+          <td><strong>Uygun ortam</strong></td>
+          <td>Prototip, hackathon, kucuk projeler</td>
+          <td>Production, buyuk projeler, DBA olan takimlar</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>21.2 Entity-First Yaklasimi</h3>
+
+  <p>Java siniflarindan baslayarak Hibernate'in <code>ddl-auto</code> ozelligi ile tablo uretimine izin verirsiniz. Bu yaklasim sadece gelistirme ortaminda kullanilmalidir.</p>
+
+<pre><code class="language-java">// Entity-First: Oncelikle Java sinifini yaz
+@Entity
+@Table(name = "products")  // Tablo adini acikca belirt
+public class Product {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @Column(name = "product_name", nullable = false, length = 200)
+    private String name;
+
+    @Column(precision = 10, scale = 2)
+    private BigDecimal price;
+
+    @Column(columnDefinition = "TEXT")
+    private String description;
+
+    @Column(name = "created_at", updatable = false)
+    private LocalDateTime createdAt;
+
+    // Getter/Setter...
+}</code></pre>
+
+<pre><code class="language-yaml"># application.yml -- SADECE dev ortaminda!
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: update  # Hibernate tablo yapisini Entity'ye gore gunceller
+    show-sql: true</code></pre>
+
+  <div class="warning-box">
+    <p><strong>Uyari:</strong> <code>ddl-auto: update</code> veya <code>create</code> kesinlikle production ortaminda KULLANILMAMALIDIR! Production'da her zaman <code>validate</code> kullanin ve sema degisikliklerini Flyway/Liquibase ile yonetin.</p>
+  </div>
+
+  <h3>21.3 Table-First Yaklasimi</h3>
+
+  <p>Oncelikle veritabani tablosunu tasarlayip olusturursiniz, sonra Entity'leri ona gore yazarsiniz.</p>
+
+<pre><code class="language-sql">-- Table-First: Oncelikle SQL ile tablo olustur
+CREATE TABLE products (
+    id          BIGSERIAL PRIMARY KEY,
+    product_name VARCHAR(200) NOT NULL,
+    price       DECIMAL(10, 2),
+    description TEXT,
+    created_at  TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at  TIMESTAMP,
+    category_id BIGINT REFERENCES categories(id)
+);
+
+CREATE INDEX idx_products_category ON products(category_id);
+CREATE INDEX idx_products_name ON products(product_name);</code></pre>
+
+<pre><code class="language-java">// Table-First: Mevcut tabloya gore Entity yaz
+@Entity
+@Table(name = "products")
+public class Product {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @Column(name = "product_name", nullable = false, length = 200)
+    private String name;  // Java'da "name", DB'de "product_name"
+
+    @Column(precision = 10, scale = 2)
+    private BigDecimal price;
+
+    @Column(columnDefinition = "TEXT")
+    private String description;
+
+    @Column(name = "created_at", updatable = false)
+    private LocalDateTime createdAt;
+
+    @Column(name = "updated_at")
+    private LocalDateTime updatedAt;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "category_id")
+    private Category category;
+
+    // Getter/Setter...
+}</code></pre>
+
+  <div class="tip-box">
+    <p><strong>DBA'larin gorusu:</strong> "Tabloyu biz tasarlariz." Thorben'in cevabi: <em>"Her iki tarafta da ayarlama gerekecek."</em> Onemli olan, sonucta Entity ve tablo yapisinin birbirine uyumlu olmasi ve performansin optimize edilmesidir.</p>
+  </div>
+
+  <h3>21.4 Entity Mapping Best Practices</h3>
+
+<pre><code class="language-java">@Entity
+@Table(name = "orders")  // Her zaman @Table ile tablo adini belirt
+public class Order {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    // @Column ile sutun adini, kisitlamalari ve tipi belirt
+    @Column(name = "order_number", nullable = false, unique = true, length = 50)
+    private String orderNumber;
+
+    @Column(name = "total_amount", precision = 12, scale = 2, nullable = false)
+    private BigDecimal totalAmount;
+
+    @Enumerated(EnumType.STRING)  // Ordinal KULLANMA! String olarak kaydet
+    @Column(name = "status", length = 20)
+    private OrderStatus status;
+
+    @Column(name = "created_at", updatable = false)
+    private LocalDateTime createdAt;
+
+    // Getter/Setter...
+}</code></pre>
+
+  <div class="concept-box">
+    <h4>Naming Strategy</h4>
+    <p>Spring Boot varsayilan olarak <code>SpringPhysicalNamingStrategy</code> kullanir. Bu strateji camelCase alan adlarini snake_case'e cevirir: <code>orderNumber</code> &rarr; <code>order_number</code>. Eger DB'deki sutun adi farkli ise <code>@Column(name = "...")</code> ile acikca belirtmelisiniz.</p>
+  </div>
+
+  <h3>21.5 Kesinlikle YAPILMAMASI Gereken</h3>
+
+  <div class="warning-box">
+    <p><strong>Kritik Uyari:</strong> Bir tarafi tasarlayip diger tarafi otomatik generate edip oldugu gibi birakmak en buyuk hatadir! Ornegin:</p>
+    <ul>
+      <li>Entity yazip <code>ddl-auto=update</code> ile tablo uretmek ve o tablonun yapisini hic incelememek</li>
+      <li>DB tablosunu tasarlayip Entity'yi otomatik generate edip mapping ayarlamalari yapmamak</li>
+      <li>Index, constraint ve performans optimizasyonlarini goz ardi etmek</li>
+    </ul>
+    <p>Her iki durumda da: Sonucta Entity ve tablo yapisini birbirine uyumlu hale getirmek icin inceleme ve ayarlamalar YAPILMALIDIR.</p>
+  </div>
+
+  <h3>21.6 Flyway/Liquibase ile Migration Yonetimi</h3>
+
+  <p>Production ortaminda sema degisikliklerini versiyon kontrol altinda yonetmek icin Flyway veya Liquibase kullanilir.</p>
+
+<pre><code class="language-sql">-- Flyway: src/main/resources/db/migration/V1__create_products.sql
+CREATE TABLE products (
+    id          BIGSERIAL PRIMARY KEY,
+    product_name VARCHAR(200) NOT NULL,
+    price       DECIMAL(10, 2),
+    description TEXT,
+    created_at  TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+-- V2__add_category_to_products.sql
+ALTER TABLE products ADD COLUMN category_id BIGINT REFERENCES categories(id);
+CREATE INDEX idx_products_category ON products(category_id);</code></pre>
+
+<pre><code class="language-xml">&lt;!-- Maven Bagimliligi --&gt;
+&lt;dependency&gt;
+    &lt;groupId&gt;org.flywaydb&lt;/groupId&gt;
+    &lt;artifactId&gt;flyway-core&lt;/artifactId&gt;
+&lt;/dependency&gt;</code></pre>
+
+<pre><code class="language-yaml"># application.yml
+spring:
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+  jpa:
+    hibernate:
+      ddl-auto: validate  # Flyway ile birlikte her zaman validate!</code></pre>
+
+  <div class="tip-box">
+    <p><strong>Ipucu:</strong> Flyway migration dosyalari <code>V1__</code>, <code>V2__</code> seklinde versiyonlanir ve bir kez calistirildiktan sonra degistirilemez. Yeni degisiklikler icin yeni migration dosyasi olusturulur. Bu sayede veritabani semasi versiyonlanmis olur.</p>
+  </div>
+
+  <div class="quiz-container" data-section="21">
+    <h3 class="quiz-title">Bilgi Kontrolu</h3>
+    <div class="quiz-question" data-correct="C">
+      <p class="question-text">1. Entity-first yaklasiminda ddl-auto=update hangi ortamda kullanilabilir?</p>
+      <div class="quiz-options">
+        <button class="quiz-option" data-value="A">A) Production ortaminda</button>
+        <button class="quiz-option" data-value="B">B) Hem production hem development ortaminda</button>
+        <button class="quiz-option" data-value="C">C) Sadece development (gelistirme) ortaminda</button>
+      </div>
+      <div class="quiz-feedback correct-feedback">&#10003; Dogru! ddl-auto=update sadece gelistirme ortaminda kullanilmalidir. Production'da her zaman validate kullanilmali ve sema degisiklikleri Flyway/Liquibase ile yonetilmelidir.</div>
+      <div class="quiz-feedback incorrect-feedback">&#10007; Yanlis. Dogru cevap C: ddl-auto=update sadece gelistirme ortaminda kullanilabilir. Production'da validate kullanilmali ve migration araclari tercih edilmelidir.</div>
+    </div>
+    <div class="quiz-question" data-correct="B">
+      <p class="question-text">2. Thorben Janssen'e gore entity-first ve table-first yaklasimlari arasindaki temel gercek nedir?</p>
+      <div class="quiz-options">
+        <button class="quiz-option" data-value="A">A) Entity-first her zaman daha iyidir</button>
+        <button class="quiz-option" data-value="B">B) Hangi taraftan baslarsan basla, sonucta her iki tarafi birbirine uyumlu hale getirmek icin ayarlamalar gerekecek</button>
+        <button class="quiz-option" data-value="C">C) Table-first production icin zorunludur</button>
+      </div>
+      <div class="quiz-feedback correct-feedback">&#10003; Dogru! Thorben'in unpopular opinion'i tam olarak budur: Baslangic noktasi fark etmez, onemli olan her iki tarafin (Java + DB) birbirine uyumlu hale getirilmesidir.</div>
+      <div class="quiz-feedback incorrect-feedback">&#10007; Yanlis. Dogru cevap B: Thorben'e gore hangi taraftan baslarsan basla, sonucta hem Entity hem de tablo tarafinda ayarlamalar yapilacaktir.</div>
+    </div>
+    <div class="quiz-question" data-correct="A">
+      <p class="question-text">3. Asagidakilerden hangisi kesinlikle YAPILMAMASI gereken bir pratiktir?</p>
+      <div class="quiz-options">
+        <button class="quiz-option" data-value="A">A) Bir tarafi tasarlayip diger tarafi otomatik generate edip oldugu gibi birakmak</button>
+        <button class="quiz-option" data-value="B">B) @Table ve @Column anotasyonlari ile mapping yapmak</button>
+        <button class="quiz-option" data-value="C">C) Flyway ile migration yonetimi yapmak</button>
+      </div>
+      <div class="quiz-feedback correct-feedback">&#10003; Dogru! En buyuk hata, bir tarafi tasarlayip diger tarafi otomatik generate edip hic incelememek ve ayarlamamaktir. Her iki tarafin da birbiriyle uyumlu olmasi saglanmalidir.</div>
+      <div class="quiz-feedback incorrect-feedback">&#10007; Yanlis. Dogru cevap A: Bir tarafi tasarlayip diger tarafi otomatik generate edip oldugu gibi birakmak en buyuk hatadir. @Table/@Column mapping ve Flyway kullanimi ise dogru pratiklerdir.</div>
+    </div>
+  </div>
+</section>
+
+<!-- Section 22: Criteria API ve Alternatifler -->
+<section class="tutorial-section" id="section-22" data-section="22">
+  <h2 class="section-title"><span class="section-number">22</span> Criteria API ve Alternatifler</h2>
+
+  <div class="concept-box">
+    <h4>JPA Criteria API Nedir?</h4>
+    <p>Criteria API, JPA'nin programatik (kod ile) sorgu olusturma mekanizmasidir. SQL veya JPQL yazmak yerine Java nesneleri kullanarak sorgu olusturursunuz. En buyuk avantaji: Sorgularin dinamik olarak (runtime'da) olusturulabilmesidir.</p>
+  </div>
+
+  <h3>22.1 Thorben'in Gorusu</h3>
+
+  <div class="warning-box">
+    <p><strong>Thorben Janssen:</strong> <em>"Teknik olarak iyi bir API ama yazdigim SQL'den cok farkli gorunuyor."</em> Problem: 30-40 satir kod, okunaksiz, degisken isimleri ve yorumlar olmadan anlasilmaz. Statik sorgular icin JPQL veya @Query her zaman daha okunaklidir.</p>
+  </div>
+
+  <h3>22.2 Criteria API ile Basit Bir Sorgu</h3>
+
+<pre><code class="language-java">// Criteria API: Fiyati 100'den buyuk urunleri getir
+@Repository
+public class ProductCriteriaRepository {
+
+    @PersistenceContext
+    private EntityManager em;
+
+    public List&lt;Product&gt; findExpensiveProducts(BigDecimal minPrice) {
+        // 1. CriteriaBuilder al
+        CriteriaBuilder cb = em.getCriteriaBuilder();
+
+        // 2. CriteriaQuery olustur (donus tipi: Product)
+        CriteriaQuery&lt;Product&gt; cq = cb.createQuery(Product.class);
+
+        // 3. Root tanimla (FROM kismi)
+        Root&lt;Product&gt; root = cq.from(Product.class);
+
+        // 4. WHERE kosulu ekle
+        cq.select(root)
+          .where(cb.greaterThan(root.get("price"), minPrice));
+
+        // 5. Sorguyu calistir
+        return em.createQuery(cq).getResultList();
+    }
+}</code></pre>
+
+  <h3>22.3 Ayni Sorgunun JPQL Karsiligi</h3>
+
+  <div class="comparison-box">
+    <table class="info-table">
+      <thead>
+        <tr>
+          <th>Criteria API (8+ satir)</th>
+          <th>JPQL (1 satir)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>
+<pre><code class="language-java">CriteriaBuilder cb = em.getCriteriaBuilder();
+CriteriaQuery&lt;Product&gt; cq = cb.createQuery(Product.class);
+Root&lt;Product&gt; root = cq.from(Product.class);
+cq.select(root)
+  .where(cb.greaterThan(root.get("price"), minPrice));
+return em.createQuery(cq).getResultList();</code></pre>
+          </td>
+          <td>
+<pre><code class="language-java">@Query("SELECT p FROM Product p WHERE p.price &gt; :minPrice")
+List&lt;Product&gt; findExpensive(@Param("minPrice") BigDecimal minPrice);</code></pre>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="tip-box">
+    <p><strong>Kural:</strong> Eger sorgunuz statik ise (yani WHERE kosullari sabit), her zaman JPQL veya @Query kullanin. Criteria API sadece dinamik sorgular icin deger kazanir.</p>
+  </div>
+
+  <h3>22.4 Eski Hibernate Criteria vs JPA Criteria</h3>
+
+  <div class="concept-box">
+    <h4>Tarihce</h4>
+    <p>Eski Hibernate Criteria API (<code>session.createCriteria()</code>) daha basit bir API'ydi ancak JPA standardi degildi ve Hibernate 5+ ile deprecated oldu. JPA Criteria API standart olmasina ragmen daha karmasik ve okunaksizdir. Hibernate 6/7 ile yeni "Restrictions" yaklasimi bu sorunu hafifletmeye calismaktadir.</p>
+  </div>
+
+  <h3>22.5 Dinamik Filtre Ornegi -- Criteria API'nin Parladigi Yer</h3>
+
+  <p>Kullanici bir arama formunda farkli filtreleri secebilir: isim, kategori, fiyat araligi... Hangi filtrelerin gelecegi runtime'da belli olur. Bu senaryoda Criteria API cok degerlidir.</p>
+
+<pre><code class="language-java">@Repository
+public class ProductSearchRepository {
+
+    @PersistenceContext
+    private EntityManager em;
+
+    public List&lt;Product&gt; searchProducts(String name, String category,
+                                         BigDecimal minPrice, BigDecimal maxPrice) {
+        CriteriaBuilder cb = em.getCriteriaBuilder();
+        CriteriaQuery&lt;Product&gt; cq = cb.createQuery(Product.class);
+        Root&lt;Product&gt; root = cq.from(Product.class);
+
+        // Dinamik olarak kosullari birlestir
+        List&lt;Predicate&gt; predicates = new ArrayList&lt;&gt;();
+
+        if (name != null &amp;&amp; !name.isBlank()) {
+            predicates.add(cb.like(cb.lower(root.get("name")),
+                           "%" + name.toLowerCase() + "%"));
+        }
+
+        if (category != null &amp;&amp; !category.isBlank()) {
+            predicates.add(cb.equal(root.get("category"), category));
+        }
+
+        if (minPrice != null) {
+            predicates.add(cb.greaterThanOrEqualTo(root.get("price"), minPrice));
+        }
+
+        if (maxPrice != null) {
+            predicates.add(cb.lessThanOrEqualTo(root.get("price"), maxPrice));
+        }
+
+        // Tum kosullari AND ile birlestir
+        cq.select(root)
+          .where(cb.and(predicates.toArray(new Predicate[0])));
+
+        return em.createQuery(cq).getResultList();
+    }
+}</code></pre>
+
+  <div class="concept-box">
+    <h4>Neden Criteria API Burada Parliyor?</h4>
+    <p>Bu sorguyu JPQL ile yazmak icin string birlestirme (<code>"SELECT ... " + (name != null ? "AND ..." : "")</code>) gerekir ki bu hem okunaksiz hem de SQL injection risklidir. Criteria API, kosullari programatik olarak ve tip guvenli sekilde olusturmanizi saglar.</p>
+  </div>
+
+  <h3>22.6 Spring Data JPA Specification Pattern</h3>
+
+  <p>Spring Data JPA, Criteria API'yi saran daha temiz bir yaklasim sunar: <code>Specification</code> pattern.</p>
+
+<pre><code class="language-java">// 1. Repository: JpaSpecificationExecutor'i extend et
+public interface ProductRepository extends JpaRepository&lt;Product, Long&gt;,
+                                           JpaSpecificationExecutor&lt;Product&gt; {
+}
+
+// 2. Specification sinifi olustur
+public class ProductSpecifications {
+
+    public static Specification&lt;Product&gt; hasName(String name) {
+        return (root, query, cb) -&gt;
+            name == null ? null : cb.like(cb.lower(root.get("name")),
+                                         "%" + name.toLowerCase() + "%");
+    }
+
+    public static Specification&lt;Product&gt; hasCategory(String category) {
+        return (root, query, cb) -&gt;
+            category == null ? null : cb.equal(root.get("category"), category);
+    }
+
+    public static Specification&lt;Product&gt; priceBetween(BigDecimal min, BigDecimal max) {
+        return (root, query, cb) -&gt; {
+            if (min != null &amp;&amp; max != null) {
+                return cb.between(root.get("price"), min, max);
+            } else if (min != null) {
+                return cb.greaterThanOrEqualTo(root.get("price"), min);
+            } else if (max != null) {
+                return cb.lessThanOrEqualTo(root.get("price"), max);
+            }
+            return null;
+        };
+    }
+}
+
+// 3. Servis katmaninda kullanimi
+@Service
+public class ProductService {
+
+    @Autowired
+    private ProductRepository repository;
+
+    public List&lt;Product&gt; search(String name, String category,
+                                BigDecimal minPrice, BigDecimal maxPrice) {
+        Specification&lt;Product&gt; spec = Specification
+            .where(ProductSpecifications.hasName(name))
+            .and(ProductSpecifications.hasCategory(category))
+            .and(ProductSpecifications.priceBetween(minPrice, maxPrice));
+
+        return repository.findAll(spec);
+    }
+}</code></pre>
+
+  <div class="tip-box">
+    <p><strong>Ipucu:</strong> Specification pattern, Criteria API'nin gucunu Spring Data JPA'nin kolayligiyla birlestirir. Her filtre ayri bir metotta tanimlanir, yeniden kullanilabilir ve test edilebilir. Yeni bir filtre eklemek icin sadece yeni bir <code>Specification</code> metodu yazmak yeterlidir.</p>
+  </div>
+
+  <h3>22.7 Hibernate 6/7: Yeni Restrictions Yaklasimi</h3>
+
+  <div class="concept-box">
+    <h4>JPQL + Dinamik WHERE Kosulu</h4>
+    <p>Hibernate 6/7, Criteria API'nin karmasikligini azaltmak icin JPQL tabanlı dinamik sorgu olusturma imkani sunan yeni yaklasimlara yonelmektedir. Temel fikir: JPQL'in okunakliligini koruyarak WHERE kosullarini dinamik olarak eklemektir.</p>
+  </div>
+
+<pre><code class="language-java">// Hibernate 6+ ile daha temiz dinamik sorgular
+// HibernateCriteriaBuilder ek metodlar sunar
+@Repository
+public class ProductSearchRepository {
+
+    @PersistenceContext
+    private EntityManager em;
+
+    public List&lt;Product&gt; search(String name, BigDecimal minPrice) {
+        HibernateCriteriaBuilder cb = (HibernateCriteriaBuilder) em.getCriteriaBuilder();
+        JpaCriteriaQuery&lt;Product&gt; cq = cb.createQuery(Product.class);
+        JpaRoot&lt;Product&gt; root = cq.from(Product.class);
+
+        List&lt;Predicate&gt; predicates = new ArrayList&lt;&gt;();
+
+        if (name != null) {
+            predicates.add(cb.ilike(root.get("name"), "%" + name + "%"));
+            // ilike: case-insensitive LIKE (Hibernate 6+)
+        }
+        if (minPrice != null) {
+            predicates.add(cb.ge(root.get("price"), minPrice));
+        }
+
+        cq.select(root).where(predicates.toArray(new Predicate[0]));
+        return em.createQuery(cq).getResultList();
+    }
+}</code></pre>
+
+  <h3>22.8 Ne Zaman Hangisini Kullan?</h3>
+
+  <div class="comparison-box">
+    <table class="info-table">
+      <thead>
+        <tr>
+          <th>Senaryo</th>
+          <th>Onerilen Yaklasim</th>
+          <th>Neden</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Statik sorgu (WHERE kosullari sabit)</td>
+          <td>JPQL / @Query</td>
+          <td>Okunakli, basit, SQL benzeri</td>
+        </tr>
+        <tr>
+          <td>Dinamik filtreler (runtime'da belirlenir)</td>
+          <td>Specification pattern</td>
+          <td>Criteria API'yi sarar, yeniden kullanilabilir</td>
+        </tr>
+        <tr>
+          <td>Cok karmasik dinamik sorgular</td>
+          <td>Criteria API (dogrudan)</td>
+          <td>Tam kontrol, tip guvenligi</td>
+        </tr>
+        <tr>
+          <td>Karmasik raporlar, analitik sorgular</td>
+          <td>jOOQ veya Native SQL</td>
+          <td>SQL'in tam gucunu kullanir</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="quiz-container" data-section="22">
+    <h3 class="quiz-title">Bilgi Kontrolu</h3>
+    <div class="quiz-question" data-correct="B">
+      <p class="question-text">1. Criteria API'nin en buyuk avantaji nedir?</p>
+      <div class="quiz-options">
+        <button class="quiz-option" data-value="A">A) JPQL'den daha okunakli olmasi</button>
+        <button class="quiz-option" data-value="B">B) Dinamik sorgulari programatik ve tip guvenli olarak olusturabilmesi</button>
+        <button class="quiz-option" data-value="C">C) Daha hizli calismasidir</button>
+      </div>
+      <div class="quiz-feedback correct-feedback">&#10003; Dogru! Criteria API'nin en buyuk avantaji, WHERE kosullarini runtime'da dinamik olarak olusturabilmesidir. String birlestirme yerine tip guvenli nesneler kullanilir.</div>
+      <div class="quiz-feedback incorrect-feedback">&#10007; Yanlis. Dogru cevap B: Criteria API, JPQL'den daha okunakli degildir ve performans farki yoktur. Gercek avantaji dinamik sorgu olusturma yetenegidir.</div>
+    </div>
+    <div class="quiz-question" data-correct="A">
+      <p class="question-text">2. Statik bir sorgu icin (WHERE kosullari sabit) hangi yaklasim tercih edilmelidir?</p>
+      <div class="quiz-options">
+        <button class="quiz-option" data-value="A">A) JPQL veya @Query -- cunku daha okunakli ve basittir</button>
+        <button class="quiz-option" data-value="B">B) Criteria API -- cunku daha guvenlidir</button>
+        <button class="quiz-option" data-value="C">C) Native SQL -- cunku daha hizlidir</button>
+      </div>
+      <div class="quiz-feedback correct-feedback">&#10003; Dogru! Statik sorgularda JPQL veya @Query her zaman daha okunakli ve tercih edilir. Criteria API statik sorgularda gereksiz karmasiklik ekler.</div>
+      <div class="quiz-feedback incorrect-feedback">&#10007; Yanlis. Dogru cevap A: Thorben'in de belirttigi gibi, statik sorgular icin JPQL her zaman daha okunaklidir. Criteria API sadece dinamik sorgularda deger kazanir.</div>
+    </div>
+    <div class="quiz-question" data-correct="C">
+      <p class="question-text">3. Spring Data JPA Specification pattern'in avantaji nedir?</p>
+      <div class="quiz-options">
+        <button class="quiz-option" data-value="A">A) JPQL yazmaya gerek kalmaz</button>
+        <button class="quiz-option" data-value="B">B) Criteria API'den daha hizli calisir</button>
+        <button class="quiz-option" data-value="C">C) Her filtre ayri bir metotta tanimlanir, yeniden kullanilabilir ve birlestirilebilir</button>
+      </div>
+      <div class="quiz-feedback correct-feedback">&#10003; Dogru! Specification pattern her filtreyi bagimsiz bir metot olarak tanimlar. Bu sayede filtreler yeniden kullanilabilir, test edilebilir ve .and() / .or() ile kolayca birlestirilebilir.</div>
+      <div class="quiz-feedback incorrect-feedback">&#10007; Yanlis. Dogru cevap C: Specification pattern'in temel avantaji filtrelerin modular, yeniden kullanilabilir ve birlestirilebilir olmasidir. Performans farki yoktur, arka planda Criteria API kullanir.</div>
+    </div>
+  </div>
+</section>
