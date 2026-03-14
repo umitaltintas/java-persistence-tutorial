@@ -18,14 +18,14 @@ import org.springframework.data.repository.query.Param;
 
 public interface ProductRepository extends JpaRepository&lt;Product, Long&gt; {
 
-    // ─── Turetilmis Sorgular (Derived Queries) ───
-    // Spring Data metot adindan SQL uretir
+    // ─── Türetilmiş Sorgular (Derived Queries) ───
+    // Spring Data metot adından SQL üretir
 
     // SELECT * FROM products WHERE category = ?
     List&lt;Product&gt; findByCategory(String category);
 
     // SELECT * FROM products WHERE category = ? AND status = ?
-    // DIKKAT: En fazla 2 parametre! Daha fazlasi okunaksiz olur.
+    // DİKKAT: En fazla 2 parametre! Daha fazlası okunaksız olur.
     List&lt;Product&gt; findByCategoryAndStatus(String category, ProductStatus status);
 
     // SELECT * FROM products WHERE price BETWEEN ? AND ?
@@ -34,22 +34,22 @@ public interface ProductRepository extends JpaRepository&lt;Product, Long&gt; {
     // SELECT * FROM products WHERE name LIKE '%keyword%'
     List&lt;Product&gt; findByNameContainingIgnoreCase(String keyword);
 
-    // ─── JPQL ile Ozel Sorgular ───
+    // ─── JPQL ile Özel Sorgular ───
     @Query("SELECT p FROM Product p WHERE p.price &gt; :minPrice ORDER BY p.price DESC")
     List&lt;Product&gt; findExpensiveProducts(@Param("minPrice") BigDecimal minPrice);
 
-    // ─── DTO Projection (Sadece gerekli alanlari cek) ───
+    // ─── DTO Projection (Sadece gerekli alanları çek) ───
     @Query("SELECT new com.example.dto.ProductSummary(p.name, p.price) " +
            "FROM Product p WHERE p.category = :category")
     List&lt;ProductSummary&gt; findSummaryByCategory(@Param("category") String category);
 
-    // ─── Native SQL (Veri tabanina ozel fonksiyonlar gerektiginde) ───
+    // ─── Native SQL (Veri tabanına özel fonksiyonlar gerektiğinde) ───
     @Query(value = "SELECT * FROM products WHERE is_active = true " +
                    "ORDER BY created_at DESC LIMIT 10",
            nativeQuery = true)
     List&lt;Product&gt; findTop10ActiveProducts();
 
-    // ─── Toplu Guncelleme (Bulk Update) ───
+    // ─── Toplu Güncelleme (Bulk Update) ───
     @Modifying
     @Query("UPDATE Product p SET p.price = p.price * :multiplier WHERE p.category = :cat")
     int bulkUpdatePrices(@Param("cat") String category, @Param("multiplier") double multiplier);
@@ -67,7 +67,7 @@ public class ProductService {
     @Autowired
     private ProductRepository productRepository;
 
-    // Yeni urun olustur
+    // Yeni ürün oluştur
     @Transactional
     public Product createProduct(ProductCreateDTO dto) {
         Product product = new Product();
@@ -77,11 +77,11 @@ public class ProductService {
         product.setStatus(ProductStatus.ACTIVE);
         product.setCreatedAt(LocalDateTime.now());
         return productRepository.save(product);
-        // Burada save() ZORUNLU cunku nesne yeni (Transient).
+        // Burada save() ZORUNLU çünkü nesne yeni (Transient).
         // save() onu Managed yapar ve ID atar.
     }
 
-    // Mevcut urunu guncelle
+    // Mevcut ürünü güncelle
     @Transactional
     public void updateProduct(Long id, ProductUpdateDTO dto) {
         Product product = productRepository.findById(id).orElseThrow();
@@ -207,7 +207,7 @@ public class ProductService {
 
   <h3>8.2 Aggregate Root Modeli</h3>
 
-<pre><code class="language-java">// Spring Data JDBC — Entity yerine "Aggregate" kullanilir
+<pre><code class="language-java">// Spring Data JDBC — Entity yerine "Aggregate" kullanılır
 import org.springframework.data.annotation.Id;
 import org.springframework.data.relational.core.mapping.MappedCollection;
 import org.springframework.data.relational.core.mapping.Table;
@@ -220,12 +220,12 @@ public class Order {
     private String status;
     private LocalDateTime createdAt;
 
-    // Aggregate icindeki alt nesneler
-    // Order kaydedildiginde Items da otomatik kaydedilir/silinir
+    // Aggregate içindeki alt nesneler
+    // Order kaydedildiğinde Items da otomatik kaydedilir/silinir
     @MappedCollection(idColumn = "order_id")
     private Set&lt;OrderItem&gt; items = new HashSet&lt;&gt;();
 
-    // Is mantigi metotlari dogrudan Entity'de
+    // İş mantığı metotları doğrudan Entity'de
     public void addItem(Long productId, int quantity, BigDecimal price) {
         items.add(new OrderItem(productId, quantity, price));
     }
@@ -257,7 +257,7 @@ public class OrderService {
         order.setStatus(newStatus);
 
         // !! Spring Data JDBC'de save() ZORUNLU !!
-        // Dirty Checking yok. Acikca kaydetmezseniz degisiklik kaybolur.
+        // Dirty Checking yok. Açıkça kaydetmezseniz değişiklik kaybolur.
         orderRepository.save(order);
     }
 }</code></pre>
@@ -349,7 +349,7 @@ public class ReportService {
             .fetchInto(SalesSummary.class);
     }
 
-    // Pencere fonksiyonu (Window Function) — Hibernate ile yapmak cok zor
+    // Pencere fonksiyonu (Window Function) — Hibernate ile yapmak çok zor
     public List&lt;RankedProduct&gt; getTopProductsByCategory() {
         return dsl
             .select(
@@ -496,7 +496,7 @@ public class ProductDashboardService {
     @Autowired
     private DSLContext dsl;  // jOOQ
 
-    // Yazma islemi: Hibernate
+    // Yazma işlemi: Hibernate
     @Transactional
     public void createProduct(ProductCreateDTO dto) {
         Product product = new Product();
@@ -505,10 +505,10 @@ public class ProductDashboardService {
         productRepository.save(product);
     }
 
-    // Karmasik okuma: jOOQ
+    // Karmaşık okuma: jOOQ
     @Transactional(readOnly = true)
     public DashboardData getDashboard() {
-        // Bu tur bir sorguyu Hibernate ile yazmak cok zahmetli olurdu
+        // Bu tür bir sorguyu Hibernate ile yazmak çok zahmetli olurdu
         return dsl
             .select(
                 count().as("total_products"),
@@ -539,26 +539,26 @@ public class HybridQueryService {
     private DSLContext dsl;
 
     public List&lt;Product&gt; findComplexProducts() {
-        // 1. jOOQ ile tip guvenli SQL stringi URET (calistirma)
+        // 1. jOOQ ile tip güvenli SQL stringi ÜRET (çalıştırma)
         SelectConditionStep&lt;?&gt; jooqQuery = dsl
             .selectFrom(PRODUCTS)
             .where(PRODUCTS.STOCK.lt(10))
             .and(PRODUCTS.CATEGORY.eq("ELECTRONICS"));
 
         String sql = jooqQuery.getSQL();
-        // Cikti: "SELECT * FROM products WHERE stock &lt; ? AND category = ?"
+        // Çıktı: "SELECT * FROM products WHERE stock &lt; ? AND category = ?"
 
         List&lt;Object&gt; bindValues = jooqQuery.getBindValues();
-        // Cikti: [10, "ELECTRONICS"]
+        // Çıktı: [10, "ELECTRONICS"]
 
-        // 2. Hibernate'in Native Query'sine ver ve calistir
+        // 2. Hibernate'in Native Query'sine ver ve çalıştır
         Query query = entityManager.createNativeQuery(sql, Product.class);
         for (int i = 0; i &lt; bindValues.size(); i++) {
             query.setParameter(i + 1, bindValues.get(i));
         }
 
         return query.getResultList();
-        // Sonuc: Hibernate tarafindan yonetilen MANAGED Entity'ler doner
+        // Sonuç: Hibernate tarafından yönetilen MANAGED Entity'ler döner
     }
 }</code></pre>
 

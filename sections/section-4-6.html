@@ -57,17 +57,17 @@ public class ProductServiceWithEM {
     @Transactional
     public void entityManagerExamples() {
 
-        // --- persist(): Yeni kayit ekler ---
+        // --- persist(): Yeni kayıt ekler ---
         Product newProduct = new Product();
         newProduct.setName("Mouse");
         newProduct.setPrice(new BigDecimal("29.99"));
         entityManager.persist(newProduct);
-        // Bu noktada newProduct MANAGED durumuna gecti
-        // Henuz DB'ye INSERT atilmamis olabilir (flush bekliyor)
+        // Bu noktada newProduct MANAGED durumuna geçti
+        // Henüz DB'ye INSERT atılmamış olabilir (flush bekliyor)
 
         // --- find(): ID ile bulur ---
         Product found = entityManager.find(Product.class, 1L);
-        // found artik MANAGED. Degisiklikler otomatik kaydedilecek.
+        // found artık MANAGED. Değişiklikler otomatik kaydedilecek.
 
         // --- JPQL Query ---
         List&lt;Product&gt; expensive = entityManager
@@ -79,23 +79,23 @@ public class ProductServiceWithEM {
         Product toDelete = entityManager.find(Product.class, 99L);
         if (toDelete != null) {
             entityManager.remove(toDelete);
-            // Transaction bittiginde DELETE sorgusu calisir
+            // Transaction bittiğinde DELETE sorgusu çalışır
         }
 
-        // --- detach(): Persistence Context'ten cikarir ---
+        // --- detach(): Persistence Context'ten çıkarır ---
         entityManager.detach(found);
-        // Artik found uzerindeki degisiklikler DB'ye YANSIMAZ
+        // Artık found üzerindeki değişiklikler DB'ye YANSIMAZ
 
         // --- merge(): Detached nesneyi tekrar Managed yapar ---
-        found.setName("Guncellenmis Isim");
+        found.setName("Güncellenmiş İsim");
         Product mergedProduct = entityManager.merge(found);
         // mergedProduct MANAGED, found hala DETACHED!
-        // Donen nesneyi kullanmak onemli.
+        // Dönen nesneyi kullanmak önemli.
 
-        // --- flush(): Bekleyen SQL'leri hemen DB'ye gonderir ---
+        // --- flush(): Bekleyen SQL'leri hemen DB'ye gönderir ---
         entityManager.flush();
-        // Normalde transaction sonunda otomatik yapilir.
-        // flush() sadece siralamanin onemli oldugu durumlarda kullanilir.
+        // Normalde transaction sonunda otomatik yapılır.
+        // flush() sadece sıralamanın önemli olduğu durumlarda kullanılır.
     }
 }</code></pre>
 
@@ -172,8 +172,8 @@ public class ProductServiceWithEM {
   <div class="diagram-box">
     <pre>
 +--------------+     +-------------------------+     +--------------+
-|  Java Kodu   | &lt;-&gt; |  Persistence Context    | &lt;-&gt; |  Veri Tabani |
-|  (Uygulama)  |     |  (1. Seviye On Bellek)  |     |  (SQL DB)    |
+|  Java Kodu   | &lt;-&gt; |  Persistence Context    | &lt;-&gt; |  Veri Tabanı |
+|  (Uygulama)  |     |  (1. Seviye Ön Bellek)  |     |  (SQL DB)    |
 +--------------+     +-------------------------+     +--------------+
     </pre>
   </div>
@@ -249,7 +249,7 @@ public class ProductServiceWithEM {
     new Product()          persist() / save()
   +-------------+       +-----------------+
   |  TRANSIENT  | ----&gt; |    MANAGED      | &lt;---- find() / query
-  |  (Yeni)     |       |  (Yonetilen)    |
+  |  (Yeni)     |       |  (Yönetilen)    |
   +-------------+       +--------+--------+
                                  |
                     +------------+------------+
@@ -257,7 +257,7 @@ public class ProductServiceWithEM {
                     v            v            |
               +-----------+  +----------+    |
               | DETACHED  |  | REMOVED  |    |
-              | (Kopmus)  |  | (Silinm.)|    |
+              | (Kopmuş)  |  | (Silinm.)|    |
               +-----+-----+  +----------+    |
                     |                         |
                     +-- merge() --------------+
@@ -268,8 +268,8 @@ public class ProductServiceWithEM {
 
   <pre><code class="language-java">Product product = new Product();
 product.setName("Laptop");
-// Su an TRANSIENT. DB bilmiyor, Hibernate bilmiyor.
-// Garbage Collector bu nesneyi istedigi zaman silebilir.</code></pre>
+// Şu an TRANSIENT. DB bilmiyor, Hibernate bilmiyor.
+// Garbage Collector bu nesneyi istediği zaman silebilir.</code></pre>
 
   <h4>B. MANAGED (Yönetilen) &mdash; İşte Tüm Sihir Burada</h4>
 
@@ -278,15 +278,15 @@ public void managedExample() {
     // Yol 1: persist ile Managed yapma
     Product newProduct = new Product();
     newProduct.setName("Tablet");
-    entityManager.persist(newProduct);  // Artik MANAGED
+    entityManager.persist(newProduct);  // Artık MANAGED
 
-    // Yol 2: find ile Managed yapma (en yaygin yol)
+    // Yol 2: find ile Managed yapma (en yaygın yol)
     Product existing = entityManager.find(Product.class, 1L);  // MANAGED
 
-    // MANAGED nesne uzerindeki degisiklikler OTOMATIK kaydedilir:
+    // MANAGED nesne üzerindeki değişiklikler OTOMATİK kaydedilir:
     existing.setPrice(new BigDecimal("999.99"));
-    // Burada save() veya update() cagrisi YOK!
-    // Transaction bittiginde Hibernate bunu kendi halleder.
+    // Burada save() veya update() çağrısı YOK!
+    // Transaction bittiğinde Hibernate bunu kendi halleder.
 }</code></pre>
 
   <div class="warning-box">
@@ -298,15 +298,15 @@ public void managedExample() {
   <pre><code class="language-java">@Transactional
 public Product getProduct(Long id) {
     return productRepository.findById(id).orElseThrow();
-    // Metot bitip @Transactional kapaninca, donen nesne DETACHED olur.
+    // Metot bitip @Transactional kapanınca, dönen nesne DETACHED olur.
 }
 
 // Controller'da:
 public void updatePrice() {
     Product p = productService.getProduct(1L);
     p.setPrice(new BigDecimal("500"));
-    // BU DEGISIKLIK VERI TABANINA YANSIMAZ!
-    // Cunku product artik DETACHED. Persistence Context kapandi.
+    // BU DEĞİŞİKLİK VERİ TABANINA YANSIMAZ!
+    // Çünkü product artık DETACHED. Persistence Context kapandı.
 }</code></pre>
 
   <div class="warning-box">
@@ -319,7 +319,7 @@ public void updatePrice() {
 public void deleteProduct(Long id) {
     Product product = entityManager.find(Product.class, id);  // MANAGED
     entityManager.remove(product);  // REMOVED
-    // Transaction bittiginde DELETE sorgusu calisir.
+    // Transaction bittiğinde DELETE sorgusu çalışır.
 }</code></pre>
 
   <h3>5.3 Persistence Context'in Kimlik Garantisi</h3>
@@ -331,14 +331,14 @@ public void deleteProduct(Long id) {
 
   <pre><code class="language-java">@Transactional
 public void identityMapDemo() {
-    // Ilk cagri: DB'ye SELECT sorgusu gider
+    // İlk çağrı: DB'ye SELECT sorgusu gider
     Product p1 = productRepository.findById(1L).get();
 
-    // Ikinci cagri: DB'ye sorgu GITMEZ! Persistence Context'ten doner.
+    // İkinci çağrı: DB'ye sorgu GİTMEZ! Persistence Context'ten döner.
     Product p2 = productRepository.findById(1L).get();
 
-    // Ayni nesne mi?
-    System.out.println(p1 == p2);  // true -- Sadece deger degil, referans da ayni!
+    // Aynı nesne mi?
+    System.out.println(p1 == p2);  // true -- Sadece değer değil, referans da aynı!
 }</code></pre>
 
   <div class="tip-box">
@@ -428,7 +428,7 @@ public void identityMapDemo() {
 
   <div class="diagram-box">
     <pre>
-  findById(1L) cagrilir
+  findById(1L) çağrılır
         |
         v
   +----------------------------------------------+
@@ -437,7 +437,7 @@ public void identityMapDemo() {
   |  Nesne:    { name: "Laptop", price: 1500 }    |
   |  Snapshot: { name: "Laptop", price: 1000 }    |
   |                                               |
-  |  Karsilastirma: price FARKLI!                 |
+  |  Karşılaştırma: price FARKLI!                 |
   |  =&gt; UPDATE products SET price=1500            |
   |     WHERE id=1                                |
   +----------------------------------------------+
@@ -455,22 +455,22 @@ public class ProductService {
     @Transactional
     public void updateProductPrice(Long id, BigDecimal newPrice) {
 
-        // Adim 1: DB'den oku -> Nesne MANAGED oldu
-        // Adim 2: Hibernate arka planda snapshot aldi:
+        // Adım 1: DB'den oku -> Nesne MANAGED oldu
+        // Adım 2: Hibernate arka planda snapshot aldı:
         //         snapshot = { name: "Laptop", price: 1000.00, ... }
         Product product = productRepository.findById(id).orElseThrow();
 
-        // Adim 3: Sadece Java nesnesinin degerini degistir
+        // Adım 3: Sadece Java nesnesinin değerini değiştir
         product.setPrice(newPrice);
 
-        // Adim 4: Metot biter, @Transactional kapanir
-        // Hibernate karsilastirir:
+        // Adım 4: Metot biter, @Transactional kapanır
+        // Hibernate karşılaştırır:
         //   mevcut  = { name: "Laptop", price: 1500.00, ... }
         //   snapshot = { name: "Laptop", price: 1000.00, ... }
         //   FARK VAR! -> UPDATE products SET price = 1500.00 WHERE id = ?
 
-        // DIKKAT: productRepository.save(product) YAZILMAZ!
-        // Cunku nesne zaten MANAGED. save() gereksiz islem yapar.
+        // DİKKAT: productRepository.save(product) YAZILMAZ!
+        // Çünkü nesne zaten MANAGED. save() gereksiz işlem yapar.
     }
 }</code></pre>
 
@@ -480,23 +480,23 @@ public class ProductService {
 
   <h3>6.3 save() Çağrısının Gereksiz Olduğu Durumlar</h3>
 
-  <pre><code class="language-java">// YANLIS -- Gereksiz save() cagrisi
+  <pre><code class="language-java">// YANLIŞ -- Gereksiz save() çağrısı
 @Transactional
 public void badExample(Long id) {
     Product product = productRepository.findById(id).orElseThrow();
-    product.setName("Yeni Isim");
-    productRepository.save(product);  // GEREKSIZ! Zaten Managed.
+    product.setName("Yeni İsim");
+    productRepository.save(product);  // GEREKSİZ! Zaten Managed.
     // Spring Data arka planda:
-    // 1. "Bu nesnenin ID'si var mi?" -> Evet
-    // 2. "O zaman merge() cagirayim" -> Ama zaten Managed...
-    // 3. Bosuna CPU dongusu harcandi.
+    // 1. "Bu nesnenin ID'si var mı?" -> Evet
+    // 2. "O zaman merge() çağırayım" -> Ama zaten Managed...
+    // 3. Boşuna CPU döngüsü harcandı.
 }</code></pre>
 
-  <pre><code class="language-java">// DOGRU -- Temiz ve verimli
+  <pre><code class="language-java">// DOĞRU -- Temiz ve verimli
 @Transactional
 public void goodExample(Long id) {
     Product product = productRepository.findById(id).orElseThrow();
-    product.setName("Yeni Isim");
+    product.setName("Yeni İsim");
     // Bitti. Hibernate halleder.
 }</code></pre>
 

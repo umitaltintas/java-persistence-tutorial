@@ -4,8 +4,21 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Java Persistence Ekosistemi - Interaktif Tutorial</title>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
+  <meta name="description" content="Java Persistence ekosistemini interaktif olarak öğrenin. JDBC, JPA, Hibernate, Spring Data JPA, jOOQ ve daha fazlası - 24 bölüm, 60+ quiz sorusu, 70+ kod örneği.">
+  <!-- Open Graph -->
+  <meta property="og:title" content="Java Persistence Ekosistemi - İnteraktif Tutorial">
+  <meta property="og:description" content="Java Persistence ekosistemini interaktif olarak öğrenin. JDBC, JPA, Hibernate, Spring Data JPA, jOOQ ve daha fazlası - 24 bölüm, 60+ quiz sorusu, 70+ kod örneği.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://umitaltintas.github.io/java-persistence-tutorial/">
+  <meta property="og:locale" content="tr_TR">
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Java Persistence Ekosistemi - İnteraktif Tutorial">
+  <meta name="twitter:description" content="Java Persistence ekosistemini interaktif olarak öğrenin. JDBC, JPA, Hibernate, Spring Data JPA, jOOQ ve daha fazlası - 24 bölüm, 60+ quiz sorusu, 70+ kod örneği.">
+  <title>Java Persistence Ekosistemi - İnteraktif Tutorial</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link id="prism-dark" rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
+  <link id="prism-light" rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" disabled>
   <style>
     :root {
       --bg: #0f1117;
@@ -22,6 +35,43 @@
       --border: #30363d;
       --sidebar-width: 300px;
       --header-height: 60px;
+    }
+
+    [data-theme="light"] {
+      --bg: #ffffff;
+      --bg-secondary: #f6f8fa;
+      --bg-tertiary: #eef1f5;
+      --text: #1f2328;
+      --text-muted: #656d76;
+      --accent: #0969da;
+      --accent-hover: #0550ae;
+      --green: #1a7f37;
+      --red: #cf222e;
+      --orange: #9a6700;
+      --purple: #8250df;
+      --border: #d0d7de;
+    }
+
+    /* Theme toggle button */
+    .theme-toggle {
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      font-size: 16px;
+      width: 34px;
+      height: 34px;
+      border-radius: 8px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s ease;
+      flex-shrink: 0;
+    }
+
+    .theme-toggle:hover {
+      color: var(--text);
+      border-color: var(--accent);
     }
 
     * {
@@ -1045,15 +1095,16 @@
 
   <!-- Header -->
   <header class="header">
-    <button class="menu-toggle" onclick="toggleSidebar()">&#9776;</button>
+    <button class="menu-toggle" onclick="toggleSidebar()" aria-label="Menüyü aç/kapat">&#9776;</button>
     <h1>Java <span>Persistence</span> Tutorial</h1>
     <div class="progress-container">
-      <div class="score-display" id="scoreDisplay">Skor: 0/0</div>
-      <button class="reset-btn" onclick="resetProgress()" title="Ilerlemeyi sifirla">Sifirla</button>
+      <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="Tema değiştir" aria-label="Tema değiştir">&#9790;</button>
+      <div class="score-display" id="scoreDisplay" aria-live="polite">Skor: 0/0</div>
+      <button class="reset-btn" onclick="resetProgress()" title="İlerlemeyi sıfırla" aria-label="İlerlemeyi sıfırla">Sıfırla</button>
       <div class="progress-bar-wrapper">
         <div class="progress-bar" id="progressBar"></div>
       </div>
-      <span class="progress-text" id="progressText">0%</span>
+      <span class="progress-text" id="progressText" aria-live="polite">0%</span>
     </div>
   </header>
 
@@ -1061,97 +1112,97 @@
   <!-- Sidebar Backdrop (mobile) -->
   <div class="sidebar-backdrop" id="sidebarBackdrop" onclick="closeSidebar()"></div>
 
-  <nav class="sidebar" id="sidebar">
+  <nav class="sidebar" id="sidebar" role="navigation" aria-label="Bölüm navigasyonu">
     <div class="sidebar-search">
-      <input type="text" id="sidebarSearchInput" placeholder="Bolum ara..." oninput="filterSidebar(this.value)">
+      <input type="text" id="sidebarSearchInput" placeholder="Bölüm ara..." aria-label="Bölüm ara" oninput="filterSidebar(this.value)">
     </div>
     <div class="nav-group">
       <div class="nav-group-title">Temeller</div>
-      <a class="nav-item" data-section="1" onclick="goToSection(1)">
-        <span class="nav-check"></span> 1. Ekosisteme Genel Bakis
+      <a class="nav-item" role="button" tabindex="0" data-section="1" onclick="goToSection(1)">
+        <span class="nav-check"></span> 1. Ekosisteme Genel Bakış
       </a>
-      <a class="nav-item" data-section="2" onclick="goToSection(2)">
+      <a class="nav-item" role="button" tabindex="0" data-section="2" onclick="goToSection(2)">
         <span class="nav-check"></span> 2. JDBC
       </a>
-      <a class="nav-item" data-section="3" onclick="goToSection(3)">
+      <a class="nav-item" role="button" tabindex="0" data-section="3" onclick="goToSection(3)">
         <span class="nav-check"></span> 3. JPA (Jakarta Persistence)
       </a>
     </div>
     <div class="nav-group">
       <div class="nav-group-title">Hibernate Derinlemesine</div>
-      <a class="nav-item" data-section="4" onclick="goToSection(4)">
+      <a class="nav-item" role="button" tabindex="0" data-section="4" onclick="goToSection(4)">
         <span class="nav-check"></span> 4. Hibernate
       </a>
-      <a class="nav-item" data-section="5" onclick="goToSection(5)">
+      <a class="nav-item" role="button" tabindex="0" data-section="5" onclick="goToSection(5)">
         <span class="nav-check"></span> 5. Persistence Context
       </a>
-      <a class="nav-item" data-section="6" onclick="goToSection(6)">
+      <a class="nav-item" role="button" tabindex="0" data-section="6" onclick="goToSection(6)">
         <span class="nav-check"></span> 6. Dirty Checking
       </a>
     </div>
     <div class="nav-group">
       <div class="nav-group-title">Spring Data & jOOQ</div>
-      <a class="nav-item" data-section="7" onclick="goToSection(7)">
+      <a class="nav-item" role="button" tabindex="0" data-section="7" onclick="goToSection(7)">
         <span class="nav-check"></span> 7. Spring Data JPA
       </a>
-      <a class="nav-item" data-section="8" onclick="goToSection(8)">
+      <a class="nav-item" role="button" tabindex="0" data-section="8" onclick="goToSection(8)">
         <span class="nav-check"></span> 8. Spring Data JDBC
       </a>
-      <a class="nav-item" data-section="9" onclick="goToSection(9)">
+      <a class="nav-item" role="button" tabindex="0" data-section="9" onclick="goToSection(9)">
         <span class="nav-check"></span> 9. jOOQ
       </a>
-      <a class="nav-item" data-section="10" onclick="goToSection(10)">
-        <span class="nav-check"></span> 10. Hibrit Yaklasim
+      <a class="nav-item" role="button" tabindex="0" data-section="10" onclick="goToSection(10)">
+        <span class="nav-check"></span> 10. Hibrit Yaklaşım
       </a>
     </div>
     <div class="nav-group">
-      <div class="nav-group-title">Ileri Konular</div>
-      <a class="nav-item" data-section="11" onclick="goToSection(11)">
+      <div class="nav-group-title">İleri Konular</div>
+      <a class="nav-item" role="button" tabindex="0" data-section="11" onclick="goToSection(11)">
         <span class="nav-check"></span> 11. R2DBC
       </a>
-      <a class="nav-item" data-section="12" onclick="goToSection(12)">
+      <a class="nav-item" role="button" tabindex="0" data-section="12" onclick="goToSection(12)">
         <span class="nav-check"></span> 12. Jakarta Data
       </a>
-      <a class="nav-item" data-section="13" onclick="goToSection(13)">
+      <a class="nav-item" role="button" tabindex="0" data-section="13" onclick="goToSection(13)">
         <span class="nav-check"></span> 13. Hibernate Search
       </a>
     </div>
     <div class="nav-group">
       <div class="nav-group-title">Best Practices</div>
-      <a class="nav-item" data-section="14" onclick="goToSection(14)">
+      <a class="nav-item" role="button" tabindex="0" data-section="14" onclick="goToSection(14)">
         <span class="nav-check"></span> 14. PUT & PATCH
       </a>
-      <a class="nav-item" data-section="15" onclick="goToSection(15)">
+      <a class="nav-item" role="button" tabindex="0" data-section="15" onclick="goToSection(15)">
         <span class="nav-check"></span> 15. DTO Mapping
       </a>
-      <a class="nav-item" data-section="16" onclick="goToSection(16)">
-        <span class="nav-check"></span> 16. Sik Yapilan Hatalar
+      <a class="nav-item" role="button" tabindex="0" data-section="16" onclick="goToSection(16)">
+        <span class="nav-check"></span> 16. Sık Yapılan Hatalar
       </a>
-      <a class="nav-item" data-section="17" onclick="goToSection(17)">
+      <a class="nav-item" role="button" tabindex="0" data-section="17" onclick="goToSection(17)">
         <span class="nav-check"></span> 17. Proje Kurulumu
       </a>
     </div>
     <div class="nav-group">
       <div class="nav-group-title">Performans & Operasyon</div>
-      <a class="nav-item" data-section="18" onclick="goToSection(18)">
-        <span class="nav-check"></span> 18. Caching Tuzaklari
+      <a class="nav-item" role="button" tabindex="0" data-section="18" onclick="goToSection(18)">
+        <span class="nav-check"></span> 18. Caching Tuzakları
       </a>
-      <a class="nav-item" data-section="19" onclick="goToSection(19)">
-        <span class="nav-check"></span> 19. SQL Ogrenmek
+      <a class="nav-item" role="button" tabindex="0" data-section="19" onclick="goToSection(19)">
+        <span class="nav-check"></span> 19. SQL Öğrenmek
       </a>
-      <a class="nav-item" data-section="20" onclick="goToSection(20)">
-        <span class="nav-check"></span> 20. SQL Izleme
+      <a class="nav-item" role="button" tabindex="0" data-section="20" onclick="goToSection(20)">
+        <span class="nav-check"></span> 20. SQL İzleme
       </a>
-      <a class="nav-item" data-section="21" onclick="goToSection(21)">
-        <span class="nav-check"></span> 21. Entity vs Table Tasarim
+      <a class="nav-item" role="button" tabindex="0" data-section="21" onclick="goToSection(21)">
+        <span class="nav-check"></span> 21. Entity vs Table Tasarım
       </a>
-      <a class="nav-item" data-section="22" onclick="goToSection(22)">
+      <a class="nav-item" role="button" tabindex="0" data-section="22" onclick="goToSection(22)">
         <span class="nav-check"></span> 22. Criteria API
       </a>
-      <a class="nav-item" data-section="23" onclick="goToSection(23)">
-        <span class="nav-check"></span> 23. DBA Isbirligi
+      <a class="nav-item" role="button" tabindex="0" data-section="23" onclick="goToSection(23)">
+        <span class="nav-check"></span> 23. DBA İşbirliği
       </a>
-      <a class="nav-item" data-section="24" onclick="goToSection(24)">
+      <a class="nav-item" role="button" tabindex="0" data-section="24" onclick="goToSection(24)">
         <span class="nav-check"></span> 24. Production Test
       </a>
     </div>
@@ -1164,13 +1215,13 @@
     <div class="tutorial-section active" id="section-welcome">
       <div class="welcome">
         <h2>Java <span>Persistence</span> Ekosistemi</h2>
-        <p>JDBC'den Spring Data'ya, Hibernate'den jOOQ'a kadar Java veri tabani ekosistemini interaktif olarak ogrenin.
+        <p>JDBC'den Spring Data'ya, Hibernate'den jOOQ'a kadar Java veri tabanı ekosistemini interaktif olarak öğrenin.
         </p>
-        <button class="start-btn" onclick="goToSection(1)">Basla</button>
+        <button class="start-btn" onclick="goToSection(1)">Başla</button>
         <div class="welcome-stats">
           <div class="welcome-stat">
             <div class="stat-num">24</div>
-            <div class="stat-label">Bolum</div>
+            <div class="stat-label">Bölüm</div>
           </div>
           <div class="welcome-stat">
             <div class="stat-num">60+</div>
@@ -1178,7 +1229,7 @@
           </div>
           <div class="welcome-stat">
             <div class="stat-num">70+</div>
-            <div class="stat-label">Kod Ornegi</div>
+            <div class="stat-label">Kod Örneği</div>
           </div>
         </div>
       </div>
@@ -1187,7 +1238,7 @@
     <!-- Loading spinner -->
     <div class="loading-spinner" id="loadingSpinner">
       <div class="spinner"></div>
-      <span>Bolumler yukleniyor...</span>
+      <span>Bölümler yükleniyor...</span>
     </div>
 
     <!-- Section content will be injected here -->
@@ -1199,7 +1250,7 @@
   <div class="section-indicator hidden" id="sectionIndicator"></div>
 
   <!-- Keyboard hint -->
-  <div class="keyboard-hint" id="keyboardHint">&larr; &rarr; Ok tuslari ile gezinin</div>
+  <div class="keyboard-hint" id="keyboardHint">&larr; &rarr; Ok tuşları ile gezinin</div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-java.min.js"></script>
@@ -1208,12 +1259,49 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
 
   <script>
+    // === Theme Toggle ===
+    function initTheme() {
+      const saved = localStorage.getItem('jpa-tutorial-theme');
+      if (saved === 'light') {
+        document.documentElement.setAttribute('data-theme', 'light');
+        document.getElementById('prism-dark').disabled = true;
+        document.getElementById('prism-light').disabled = false;
+      }
+      updateThemeIcon();
+    }
+
+    function toggleTheme() {
+      const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+      if (isLight) {
+        document.documentElement.removeAttribute('data-theme');
+        document.getElementById('prism-dark').disabled = false;
+        document.getElementById('prism-light').disabled = true;
+        localStorage.setItem('jpa-tutorial-theme', 'dark');
+      } else {
+        document.documentElement.setAttribute('data-theme', 'light');
+        document.getElementById('prism-dark').disabled = true;
+        document.getElementById('prism-light').disabled = false;
+        localStorage.setItem('jpa-tutorial-theme', 'light');
+      }
+      updateThemeIcon();
+    }
+
+    function updateThemeIcon() {
+      const btn = document.getElementById('themeToggle');
+      if (!btn) return;
+      const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+      btn.innerHTML = isLight ? '&#9790;' : '&#9728;';
+    }
+
+    initTheme();
+
     // === State ===
     const TOTAL_SECTIONS = 24;
     const sectionOrder = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24];
     let currentSection = 'welcome';
     let completedSections = new Set();
     let quizScore = { correct: 0, total: 0 };
+    let answeredQuestions = {};
 
     // Load state from localStorage
     try {
@@ -1221,18 +1309,40 @@
       if (saved) {
         completedSections = new Set(saved.completed || []);
         quizScore = saved.score || { correct: 0, total: 0 };
+        answeredQuestions = saved.answeredQuestions || {};
       }
     } catch (e) { }
 
     function saveState() {
       localStorage.setItem('jpa-tutorial-state', JSON.stringify({
         completed: [...completedSections],
-        score: quizScore
+        score: quizScore,
+        answeredQuestions: answeredQuestions
       }));
     }
 
     // === Navigation ===
+    let _hashUpdating = false;
+
+    function navigateToHash() {
+      var match = window.location.hash.match(/^#section-(\d+)$/);
+      if (match) {
+        var num = parseInt(match[1], 10);
+        if (num >= 1 && num <= TOTAL_SECTIONS) {
+          goToSection(num);
+        }
+      }
+    }
+
+    window.addEventListener('hashchange', function () {
+      if (!_hashUpdating) navigateToHash();
+    });
+
     function goToSection(num) {
+      _hashUpdating = true;
+      window.location.hash = 'section-' + num;
+      _hashUpdating = false;
+
       // Hide all sections
       document.querySelectorAll('.tutorial-section').forEach(s => s.classList.remove('active'));
 
@@ -1250,7 +1360,7 @@
           const nextIdx = sectionOrder.indexOf(num) + 1;
           navBtns.innerHTML = `
         <button class="nav-btn" onclick="goToSection(${prevIdx >= 0 ? sectionOrder[prevIdx] : num})" ${prevIdx < 0 ? 'disabled' : ''}>
-          &#8592; Onceki
+          &#8592; Önceki
         </button>
         <button class="nav-btn primary" onclick="completeAndNext(${num})">
           ${nextIdx < sectionOrder.length ? 'Tamamla & Sonraki &#8594;' : 'Tamamla &#10003;'}
@@ -1315,8 +1425,9 @@
     }
 
     function resetProgress() {
-      if (confirm('Tum ilerlemeniz silinecek. Emin misiniz?')) {
+      if (confirm('Tüm ilerlemeniz silinecek. Emin misiniz?')) {
         localStorage.removeItem('jpa-tutorial-state');
+        window.location.hash = '';
         location.reload();
       }
     }
@@ -1335,7 +1446,7 @@
         indicator.classList.add('hidden');
       } else {
         indicator.classList.remove('hidden');
-        indicator.textContent = 'Bolum ' + currentSection + ' / ' + TOTAL_SECTIONS;
+        indicator.textContent = 'Bölüm ' + currentSection + ' / ' + TOTAL_SECTIONS;
       }
     }
 
@@ -1349,6 +1460,16 @@
       question.classList.add('answered');
       const correct = question.dataset.correct;
       const chosen = btn.dataset.value;
+
+      // Build unique key for this question
+      const section = question.closest('.tutorial-section');
+      const sectionId = section ? section.id : 'unknown';
+      const questions = section ? [...section.querySelectorAll('.quiz-question')] : [];
+      const qIndex = questions.indexOf(question);
+      const qKey = sectionId + '-q-' + qIndex;
+
+      // Save answered state
+      answeredQuestions[qKey] = chosen;
 
       // Disable all options
       question.querySelectorAll('.quiz-option').forEach(o => o.classList.add('disabled'));
@@ -1375,14 +1496,14 @@
       const quizContainer = question.closest('.quiz-container');
       if (quizContainer) {
         const allQuestions = quizContainer.querySelectorAll('.quiz-question');
-        const answeredQuestions = quizContainer.querySelectorAll('.quiz-question.answered');
-        if (allQuestions.length === answeredQuestions.length) {
+        const answeredInContainer = quizContainer.querySelectorAll('.quiz-question.answered');
+        if (allQuestions.length === answeredInContainer.length) {
           // All questions answered - show complete prompt
           let prompt = quizContainer.querySelector('.complete-section-prompt');
           if (!prompt) {
             prompt = document.createElement('div');
             prompt.className = 'complete-section-prompt';
-            prompt.innerHTML = '<button onclick="scrollToCompleteButton()">Bolumu tamamla &darr;</button>';
+            prompt.innerHTML = '<button onclick="scrollToCompleteButton()">Bölümü tamamla &darr;</button>';
             quizContainer.appendChild(prompt);
           }
           prompt.classList.add('visible');
@@ -1418,7 +1539,7 @@
           const code = pre.querySelector('code');
           if (code) {
             navigator.clipboard.writeText(code.textContent).then(() => {
-              btn.textContent = 'Kopyalandi!';
+              btn.textContent = 'Kopyalandı!';
               btn.classList.add('copied');
               setTimeout(() => { btn.textContent = 'Kopyala'; btn.classList.remove('copied'); }, 2000);
             });
@@ -1469,7 +1590,58 @@
       });
 
       addCopyButtons();
+      restoreQuizState();
       updateProgress();
+    }
+
+    // === Restore Quiz State ===
+    function restoreQuizState() {
+      for (const [qKey, chosen] of Object.entries(answeredQuestions)) {
+        // Parse key: "section-N-q-M"
+        const lastQIdx = qKey.lastIndexOf('-q-');
+        if (lastQIdx === -1) continue;
+        const sectionId = qKey.substring(0, lastQIdx);
+        const qIndex = parseInt(qKey.substring(lastQIdx + 3), 10);
+
+        const section = document.getElementById(sectionId);
+        if (!section) continue;
+
+        const questions = section.querySelectorAll('.quiz-question');
+        if (qIndex >= questions.length) continue;
+
+        const question = questions[qIndex];
+        if (question.classList.contains('answered')) continue;
+
+        question.classList.add('answered');
+        const correct = question.dataset.correct;
+
+        // Disable all options
+        question.querySelectorAll('.quiz-option').forEach(o => o.classList.add('disabled'));
+
+        // Find and mark the chosen option
+        question.querySelectorAll('.quiz-option').forEach(o => {
+          if (o.dataset.value === chosen) {
+            if (chosen === correct) {
+              o.classList.add('selected', 'correct');
+            } else {
+              o.classList.add('selected', 'incorrect');
+            }
+          }
+          // Show correct answer if wrong choice was made
+          if (chosen !== correct && o.dataset.value === correct) {
+            o.classList.add('show-correct');
+          }
+        });
+
+        // Show feedback
+        if (chosen === correct) {
+          const fb = question.querySelector('.correct-feedback');
+          if (fb) fb.style.display = 'block';
+        } else {
+          const fb = question.querySelector('.incorrect-feedback');
+          if (fb) fb.style.display = 'block';
+        }
+      }
     }
 
     // === Keyboard navigation ===
@@ -1484,7 +1656,9 @@
     });
 
     // Init
-    loadSections();
+    loadSections().then(function () {
+      if (window.location.hash) navigateToHash();
+    });
 
     // Keyboard hint: fade after 5 seconds
     setTimeout(function () {

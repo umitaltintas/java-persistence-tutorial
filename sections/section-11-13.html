@@ -9,7 +9,7 @@
 
   <h3>11.1 Spring Data R2DBC Kullanımı</h3>
 
-  <pre><code class="language-java">// Entity tanimi (JPA anotasyonlari KULLANILMAZ)
+  <pre><code class="language-java">// Entity tanımı (JPA anotasyonları KULLANILMAZ)
 import org.springframework.data.annotation.Id;
 import org.springframework.data.relational.core.mapping.Table;
 
@@ -202,16 +202,16 @@ public class Product {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @FullTextField(analyzer = "turkish")  // Tam metin arama alani
+    @FullTextField(analyzer = "turkish")  // Tam metin arama alanı
     private String name;
 
     @FullTextField(analyzer = "turkish")
     private String description;
 
-    @KeywordField  // Tam eslesme (filtreleme icin)
+    @KeywordField  // Tam eşleşme (filtreleme için)
     private String category;
 
-    @GenericField(sortable = Sortable.YES)  // Siralanabilir
+    @GenericField(sortable = Sortable.YES)  // Sıralanabilir
     private BigDecimal price;
 }</code></pre>
 
@@ -241,8 +241,8 @@ public class ProductSearchService {
             .where(f -&gt; f.match()
                 .fields("name", "description")
                 .matching(keyword)
-                .fuzzy(1))  // 1 karakter hata toleransi ("laptob" → "laptop")
-            .sort(f -&gt; f.score())  // Alaka duzeyine gore sirala
+                .fuzzy(1))  // 1 karakter hata toleransı ("laptob" → "laptop")
+            .sort(f -&gt; f.score())  // Alaka düzeyine göre sırala
             .fetchAll();
 
         return result.hits();

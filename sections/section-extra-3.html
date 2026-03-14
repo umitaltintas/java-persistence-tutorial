@@ -1,51 +1,51 @@
-<!-- Section 23: DBA Isbirligi ve Performans Analizi -->
+<!-- Section 23: DBA İşbirliği ve Performans Analizi -->
 <section class="tutorial-section" id="section-23" data-section="23">
-  <h2 class="section-title"><span class="section-number">23</span> DBA Isbirligi ve Performans Analizi</h2>
+  <h2 class="section-title"><span class="section-number">23</span> DBA İşbirliği ve Performans Analizi</h2>
 
-  <h3>23.1 DBA'larin Degeri</h3>
+  <h3>23.1 DBA'ların Değeri</h3>
 
   <div class="concept-box">
-    <h4>Neden DBA ile Calismaliyiz?</h4>
-    <p>Thorben'in hikayesi: Gelistirici ekibi saatler boyunca bir sorguyu optimize edemedi. DBA birkac saat icinde sorguyu <strong>1 saniyenin altina</strong> dusurdu. Sebep basit: DBA'lar <strong>tamamen farkli bir beceri setine</strong> sahiptir. SQL optimizasyonu, execution plan analizi ve index stratejisi konusunda uzmanlardir.</p>
+    <h4>Neden DBA ile Çalışmalıyız?</h4>
+    <p>Thorben'in hikayesi: Geliştirici ekibi saatler boyunca bir sorguyu optimize edemedi. DBA birkaç saat içinde sorguyu <strong>1 saniyenin altına</strong> düşürdü. Sebep basit: DBA'lar <strong>tamamen farklı bir beceri setine</strong> sahiptir. SQL optimizasyonu, execution plan analizi ve index stratejisi konusunda uzmanlardır.</p>
   </div>
 
   <div class="tip-box">
-    <p><strong>Ideal Durum:</strong> Ekipte bir DBA olmasi ve development surecine aktif olarak katilmasi. DBA sadece production sorunlarinda degil, gelistirme asamasinda da degerlidir.</p>
+    <p><strong>İdeal Durum:</strong> Ekipte bir DBA olması ve development sürecine aktif olarak katılması. DBA sadece production sorunlarında değil, geliştirme aşamasında da değerlidir.</p>
   </div>
 
-  <h3>23.2 Haftalik DBA Review Sureci</h3>
+  <h3>23.2 Haftalık DBA Review Süreci</h3>
 
   <div class="good-practice">
-    <h4>Pratik Oneri: Haftalik (veya iki haftalik) DBA Review</h4>
-    <p>Ozel bir test run yapilir ve DBA asagidakileri kontrol eder:</p>
+    <h4>Pratik Öneri: Haftalık (veya iki haftalık) DBA Review</h4>
+    <p>Özel bir test run yapılır ve DBA aşağıdakileri kontrol eder:</p>
     <ol>
-      <li><strong>En yavas sorgular:</strong> Execution time'i yuksek sorgulari tespit eder</li>
-      <li><strong>En sik calisan sorgular:</strong> Gereksiz tekrar eden sorgulari bulur</li>
-      <li>Sonuclari <strong>standup meeting'e</strong> getirir ve ekiple paylesir</li>
+      <li><strong>En yavaş sorgular:</strong> Execution time'i yüksek sorguları tespit eder</li>
+      <li><strong>En sık çalışan sorgular:</strong> Gereksiz tekrar eden sorguları bulur</li>
+      <li>Sonuçları <strong>standup meeting'e</strong> getirir ve ekiple paylaşır</li>
     </ol>
   </div>
 
   <div class="warning-box">
-    <p><strong>DBA Perspektifinden N+1 Tespiti:</strong> "Yeni bir sorgu buldum ve 3500 kere calistiriyorsunuz!" — Bu tipik bir N+1 problemidir. Gelistirici kodda farketmeyebilir, ancak DBA veritabani tarafinda bunu hemen gorur. DBA'nin bu tur bulgulari standup'a getirmesi, performans sorunlarini erken yakalamak icin kritiktir.</p>
+    <p><strong>DBA Perspektifinden N+1 Tespiti:</strong> "Yeni bir sorgu buldum ve 3500 kere çalıştırıyorsunuz!" — Bu tipik bir N+1 problemidir. Geliştirici kodda farketmeyebilir, ancak DBA veritabanı tarafında bunu hemen görür. DBA'nın bu tür bulguları standup'a getirmesi, performans sorunlarını erken yakalamak için kritiktir.</p>
   </div>
 
   <h3>23.3 EXPLAIN ANALYZE ile Sorgu Analizi</h3>
 
   <div class="concept-box">
     <h4>EXPLAIN ANALYZE Nedir?</h4>
-    <p>PostgreSQL'de bir sorgunun nasil calistigini gosteren komuttur. Sorguyu gercekten calistirir ve her adimin ne kadar surdigini, kac satir isledigini detayli olarak raporlar.</p>
+    <p>PostgreSQL'de bir sorgunun nasıl çalıştığını gösteren komuttur. Sorguyu gerçekten çalıştırır ve her adımın ne kadar sürdüğini, kaç satır işlediğini detaylı olarak raporlar.</p>
   </div>
 
-<pre><code class="language-sql">-- Basit bir sorgunun execution plan'ini gormek
+<pre><code class="language-sql">-- Basit bir sorgunun execution plan'ını görmek
 EXPLAIN ANALYZE
 SELECT * FROM orders o
 JOIN order_items oi ON o.id = oi.order_id
 WHERE o.status = 'PENDING'
 ORDER BY o.created_at DESC;</code></pre>
 
-  <h4>EXPLAIN ANALYZE Ciktisini Okuma</h4>
+  <h4>EXPLAIN ANALYZE Çıktısını Okuma</h4>
 
-<pre><code class="language-sql">-- Ornek EXPLAIN ANALYZE ciktisi:
+<pre><code class="language-sql">-- Örnek EXPLAIN ANALYZE çıktısı:
 -- Sort  (cost=156.34..158.67 rows=932 width=128) (actual time=12.456..12.890 rows=950 loops=1)
 --   Sort Key: o.created_at DESC
 --   Sort Method: quicksort  Memory: 142kB
@@ -60,22 +60,22 @@ ORDER BY o.created_at DESC;</code></pre>
 -- Planning Time: 0.234 ms
 -- Execution Time: 13.012 ms
 
--- DIKKAT EDILECEKLER:
--- 1. "Seq Scan" goruyorsaniz: Tablo full taranmis, index eksik olabilir
--- 2. "actual time" vs "cost": Gercek sure ile tahmini maliyeti karsilastirin
--- 3. "Rows Removed by Filter": Cok yuksekse, index eklenmeli
--- 4. "loops": 1'den buyukse, ic ice dongu var (N+1 belirtisi olabilir)</code></pre>
+-- DİKKAT EDILECEKLER:
+-- 1. "Seq Scan" görüyorsanız: Tablo full taranmış, index eksik olabilir
+-- 2. "actual time" vs "cost": Gerçek süre ile tahmini maliyeti karşılaştırın
+-- 3. "Rows Removed by Filter": Çok yüksekse, index eklenmeli
+-- 4. "loops": 1'den büyükse, iç içe döngü var (N+1 belirtisi olabilir)</code></pre>
 
   <h3>23.4 Index Stratejisi</h3>
 
   <div class="concept-box">
     <h4>Index Temelleri</h4>
-    <p>Index, veritabaninda arama islemlerini hizlandiran bir veri yapidir (kitabin indeksi gibi). Ancak her index INSERT ve UPDATE islemlerini yavaslatir cunku index de guncellenmek zorundadir.</p>
+    <p>Index, veritabanında arama işlemlerini hızlandıran bir veri yapıdır (kitabın indeksi gibi). Ancak her index INSERT ve UPDATE işlemlerini yavaşlatır çünkü index de güncellenmek zorundadır.</p>
   </div>
 
   <div class="good-practice">
-    <h4>Low-Hanging Fruit: Foreign Key Kolonlarinda Index</h4>
-    <p>Foreign key kolonlarina index eklemek en kolay ve en etkili performans iyilestirmesidir. JOIN islemlerinde buyuk fark yaratir.</p>
+    <h4>Low-Hanging Fruit: Foreign Key Kolonlarında Index</h4>
+    <p>Foreign key kolonlarına index eklemek en kolay ve en etkili performans iyileştirmesidir. JOIN işlemlerinde büyük fark yaratır.</p>
 <pre><code class="language-java">@Entity
 @Table(name = "order_items", indexes = {
     @Index(name = "idx_order_item_order_id", columnList = "order_id"),
@@ -102,14 +102,14 @@ public class OrderItem {
   </div>
 
   <div class="warning-box">
-    <p><strong>Cok Fazla Index de Sorun!</strong> Her index INSERT ve UPDATE islemlerini yavaslatir. Bir tabloda 15-20 index varsa, yazma islemleri ciddi sekilde etkilenir. Index eklerken okuma/yazma dengesini dusunun.</p>
+    <p><strong>Çok Fazla Index de Sorun!</strong> Her index INSERT ve UPDATE işlemlerini yavaşlatır. Bir tabloda 15-20 index varsa, yazma işlemleri ciddi şekilde etkilenir. Index eklerken okuma/yazma dengesini düşünün.</p>
   </div>
 
-  <h4>Composite Index (Birlesik Index)</h4>
+  <h4>Composite Index (Birleşik Index)</h4>
 
-<pre><code class="language-java">// Composite Index: Birden fazla kolon icin tek index
-// Kullanim senaryosu: WHERE status = ? AND created_at &gt; ? seklinde
-// sik kullanilan sorgular varsa
+<pre><code class="language-java">// Composite Index: Birden fazla kolon için tek index
+// Kullanım senaryosu: WHERE status = ? AND created_at &gt; ? şeklinde
+// sık kullanılan sorgular varsa
 @Entity
 @Table(name = "orders", indexes = {
     @Index(name = "idx_order_status_date", columnList = "status, created_at"),
@@ -134,41 +134,41 @@ public class Order {
 }</code></pre>
 
   <div class="tip-box">
-    <p><strong>Composite Index Sirasi Onemlidir:</strong> <code>columnList = "status, created_at"</code> seklinde tanimlanan index, <code>WHERE status = ?</code> sorgularinda da calisir ama <code>WHERE created_at &gt; ?</code> sorgularinda calismaz. Sol-dan-saga (leftmost prefix) kurali gecerlidir.</p>
+    <p><strong>Composite Index Sırası Önemlidir:</strong> <code>columnList = "status, created_at"</code> şeklinde tanımlanan index, <code>WHERE status = ?</code> sorgularında da çalışır ama <code>WHERE created_at &gt; ?</code> sorgularında çalışmaz. Soldan-sağa (leftmost prefix) kuralı geçerlidir.</p>
   </div>
 
-  <h3>23.5 Database Vendor Araclari</h3>
+  <h3>23.5 Database Vendor Araçları</h3>
 
   <div class="comparison-box">
     <table class="info-table">
       <thead>
         <tr>
-          <th>Veritabani</th>
-          <th>Arac</th>
-          <th>Kullanim</th>
+          <th>Veritabanı</th>
+          <th>Araç</th>
+          <th>Kullanım</th>
         </tr>
       </thead>
       <tbody>
         <tr>
           <td><strong>PostgreSQL</strong></td>
           <td><code>pg_stat_statements</code></td>
-          <td>En sik calisan ve en yavas sorgulari listeler</td>
+          <td>En sık çalışan ve en yavaş sorguları listeler</td>
         </tr>
         <tr>
           <td><strong>MySQL</strong></td>
           <td><code>slow_query_log</code></td>
-          <td>Belirli esik degerinden yavas calisan sorgulari loglar</td>
+          <td>Belirli eşik değerinden yavaş çalışan sorguları loglar</td>
         </tr>
         <tr>
           <td><strong>Oracle</strong></td>
           <td><code>AWR Report</code></td>
-          <td>Performans istatistiklerini detayli raporlar</td>
+          <td>Performans istatistiklerini detaylı raporlar</td>
         </tr>
       </tbody>
     </table>
   </div>
 
-<pre><code class="language-sql">-- PostgreSQL: En yavas 10 sorguyu bul
+<pre><code class="language-sql">-- PostgreSQL: En yavaş 10 sorguyu bul
 SELECT query,
        calls,
        mean_exec_time::numeric(10,2) AS avg_ms,
@@ -177,7 +177,7 @@ FROM pg_stat_statements
 ORDER BY mean_exec_time DESC
 LIMIT 10;
 
--- PostgreSQL: En sik calisan 10 sorguyu bul
+-- PostgreSQL: En sık çalışan 10 sorguyu bul
 SELECT query,
        calls,
        mean_exec_time::numeric(10,2) AS avg_ms
@@ -187,40 +187,40 @@ LIMIT 10;</code></pre>
 
 <pre><code class="language-sql">-- MySQL: Slow query log'u aktif et
 SET GLOBAL slow_query_log = 'ON';
-SET GLOBAL long_query_time = 1;  -- 1 saniyeden yavas sorgulari logla
+SET GLOBAL long_query_time = 1;  -- 1 saniyeden yavaş sorguları logla
 SET GLOBAL slow_query_log_file = '/var/log/mysql/slow.log';</code></pre>
 
   <div class="quiz-container" data-section="23">
-    <h3 class="quiz-title">Bilgi Kontrolu</h3>
+    <h3 class="quiz-title">Bilgi Kontrolü</h3>
     <div class="quiz-question" data-correct="B">
-      <p class="question-text">1. DBA'nin haftalik review'da kontrol etmesi gereken iki temel metrik nedir?</p>
+      <p class="question-text">1. DBA'nın haftalık review'da kontrol etmesi gereken iki temel metrik nedir?</p>
       <div class="quiz-options">
-        <button class="quiz-option" data-value="A">A) CPU kullanimi ve disk alani</button>
-        <button class="quiz-option" data-value="B">B) En yavas sorgular ve en sik calisan sorgular</button>
-        <button class="quiz-option" data-value="C">C) Tablo boyutlari ve index sayilari</button>
+        <button class="quiz-option" data-value="A">A) CPU kullanımı ve disk alanı</button>
+        <button class="quiz-option" data-value="B">B) En yavaş sorgular ve en sık çalışan sorgular</button>
+        <button class="quiz-option" data-value="C">C) Tablo boyutları ve index sayıları</button>
       </div>
-      <div class="quiz-feedback correct-feedback">&#10003; Dogru! DBA en yavas sorgulari (performance bottleneck) ve en sik calisan sorgulari (N+1 gibi tekrar problemleri) kontrol etmelidir.</div>
-      <div class="quiz-feedback incorrect-feedback">&#10007; Yanlis. Dogru cevap B: DBA haftalik review'da en yavas sorgulari ve en sik calisan sorgulari kontrol eder. Bu iki metrik performans sorunlarini ve N+1 gibi tekrar problemlerini ortaya cikarir.</div>
+      <div class="quiz-feedback correct-feedback">&#10003; Doğru! DBA en yavaş sorguları (performance bottleneck) ve en sık çalışan sorguları (N+1 gibi tekrar problemleri) kontrol etmelidir.</div>
+      <div class="quiz-feedback incorrect-feedback">&#10007; Yanlış. Doğru cevap B: DBA haftalık review'da en yavaş sorguları ve en sık çalışan sorguları kontrol eder. Bu iki metrik performans sorunlarını ve N+1 gibi tekrar problemlerini ortaya çıkarır.</div>
     </div>
     <div class="quiz-question" data-correct="A">
-      <p class="question-text">2. EXPLAIN ANALYZE ciktisinda "Seq Scan" gormek ne anlama gelir?</p>
+      <p class="question-text">2. EXPLAIN ANALYZE çıktısında "Seq Scan" görmek ne anlama gelir?</p>
       <div class="quiz-options">
-        <button class="quiz-option" data-value="A">A) Tablo full taranmis, muhtemelen uygun bir index eksik</button>
-        <button class="quiz-option" data-value="B">B) Sorgu en optimal sekilde calisiyor</button>
-        <button class="quiz-option" data-value="C">C) Veritabani baglantisi yavas</button>
+        <button class="quiz-option" data-value="A">A) Tablo full taranmış, muhtemelen uygun bir index eksik</button>
+        <button class="quiz-option" data-value="B">B) Sorgu en optimal şekilde çalışıyor</button>
+        <button class="quiz-option" data-value="C">C) Veritabanı bağlantısı yavaş</button>
       </div>
-      <div class="quiz-feedback correct-feedback">&#10003; Dogru! Seq Scan (Sequential Scan), tablonun bastan sona tarandigini gosterir. Buyuk tablolarda bu cok yavas olabilir ve genellikle uygun bir index eklenmesi gerektigini isaret eder.</div>
-      <div class="quiz-feedback incorrect-feedback">&#10007; Yanlis. Dogru cevap A: Seq Scan, tablonun tamaminin tarandigini gosterir. Bu buyuk tablolarda performans sorunu yaratir ve genellikle eksik bir index'e isaret eder.</div>
+      <div class="quiz-feedback correct-feedback">&#10003; Doğru! Seq Scan (Sequential Scan), tablonun baştan sona tarandığını gösterir. Büyük tablolarda bu çok yavaş olabilir ve genellikle uygun bir index eklenmesi gerektiğini işaret eder.</div>
+      <div class="quiz-feedback incorrect-feedback">&#10007; Yanlış. Doğru cevap A: Seq Scan, tablonun tamamının tarandığını gösterir. Bu büyük tablolarda performans sorunu yaratır ve genellikle eksik bir index'e işaret eder.</div>
     </div>
     <div class="quiz-question" data-correct="C">
-      <p class="question-text">3. Foreign key kolonlarina index eklemek neden "low-hanging fruit" olarak adlandirilir?</p>
+      <p class="question-text">3. Foreign key kolonlarına index eklemek neden "low-hanging fruit" olarak adlandırılır?</p>
       <div class="quiz-options">
-        <button class="quiz-option" data-value="A">A) Cunku otomatik olarak eklenir</button>
-        <button class="quiz-option" data-value="B">B) Cunku sadece kucuk tablolarda ise yarar</button>
-        <button class="quiz-option" data-value="C">C) Cunku minimum eforla buyuk performans kazanci saglar, ozellikle JOIN islemlerinde</button>
+        <button class="quiz-option" data-value="A">A) Çünkü otomatik olarak eklenir</button>
+        <button class="quiz-option" data-value="B">B) Çünkü sadece küçük tablolarda işe yarar</button>
+        <button class="quiz-option" data-value="C">C) Çünkü minimum eforla büyük performans kazancı sağlar, özellikle JOIN işlemlerinde</button>
       </div>
-      <div class="quiz-feedback correct-feedback">&#10003; Dogru! FK kolonlarindaki index, JOIN islemlerini onemli olcude hizlandirir ve eklenmesi cok kolaydir. Minimum efor, maksimum kazanc saglar.</div>
-      <div class="quiz-feedback incorrect-feedback">&#10007; Yanlis. Dogru cevap C: Foreign key index'leri minimum eforla eklenir ve JOIN islemlerinde buyuk performans kazanci saglar. Bu yuzden "kolay meyve" (low-hanging fruit) olarak adlandirilir.</div>
+      <div class="quiz-feedback correct-feedback">&#10003; Doğru! FK kolonlarındaki index, JOIN işlemlerini önemli ölçüde hızlandırır ve eklenmesi çok kolaydır. Minimum efor, maksimum kazanç sağlar.</div>
+      <div class="quiz-feedback incorrect-feedback">&#10007; Yanlış. Doğru cevap C: Foreign key index'leri minimum eforla eklenir ve JOIN işlemlerinde büyük performans kazancı sağlar. Bu yüzden "kolay meyve" (low-hanging fruit) olarak adlandırılır.</div>
     </div>
   </div>
 </section>
@@ -229,31 +229,31 @@ SET GLOBAL slow_query_log_file = '/var/log/mysql/slow.log';</code></pre>
 <section class="tutorial-section" id="section-24" data-section="24">
   <h2 class="section-title"><span class="section-number">24</span> Production Benzeri Ortamda Test</h2>
 
-  <h3>24.1 Problem: Local vs Production Farki</h3>
+  <h3>24.1 Problem: Local vs Production Farkı</h3>
 
   <div class="warning-box">
-    <p><strong>Thorben'in Uyarisi:</strong> "Local in-memory database ile test etmekten hoslanmiyorum." Sebep: Development ortaminda birkac duzine kayit varken, production'da milyonlarca kayit bulunur. Performans sorunlari development'ta gozukmez, ancak production'da patlak verir.</p>
+    <p><strong>Thorben'in Uyarısı:</strong> "Local in-memory database ile test etmekten hoşlanmıyorum." Sebep: Development ortamında birkaç düzine kayıt varken, production'da milyonlarca kayıt bulunur. Performans sorunları development'ta gözükmez, ancak production'da patlak verir.</p>
   </div>
 
   <div class="bad-practice">
     <h4>H2 ile Test Etmenin Riskleri</h4>
-    <p>H2 in-memory database ile test etmek yaniltici sonuclar verir:</p>
+    <p>H2 in-memory database ile test etmek yanıltıcı sonuçlar verir:</p>
     <ul>
-      <li><strong>SQL uyumlulugu sinirli:</strong> H2'nin PostgreSQL/MySQL modu tam uyumlu degildir</li>
-      <li><strong>Dialect farkliliklari:</strong> Bazi SQL fonksiyonlari H2'de farkli calisir veya desteklenmez</li>
-      <li><strong>Veri hacmi:</strong> 10 satirda calisan sorgu, 10 milyon satirda timeout alabilir</li>
-      <li><strong>Index etkileri:</strong> Kucuk veri setlerinde index olsa da olmasa da fark etmez</li>
+      <li><strong>SQL uyumluluğu sınırlı:</strong> H2'nin PostgreSQL/MySQL modu tam uyumlu değildir</li>
+      <li><strong>Dialect farklılıkları:</strong> Bazı SQL fonksiyonları H2'de farklı çalışır veya desteklenmez</li>
+      <li><strong>Veri hacmi:</strong> 10 satırda çalışan sorgu, 10 milyon satırda timeout alabilir</li>
+      <li><strong>Index etkileri:</strong> Küçük veri setlerinde index olsa da olmasa da fark etmez</li>
     </ul>
   </div>
 
   <h3>24.2 Best Practice Hierarchy</h3>
 
   <div class="concept-box">
-    <h4>Test Ortami Hiyerarsisi (En iyiden en kotusune)</h4>
+    <h4>Test Ortamı Hiyerarşisi (En iyiden en kötüsüne)</h4>
     <ol>
-      <li><strong>Ayni DB motoru ile test:</strong> Testcontainers ile PostgreSQL/MySQL container'i calistir</li>
-      <li><strong>Anonimlestirilmis production verisi:</strong> Gercek veri hacimleriyle test pipeline'i</li>
-      <li><strong>Dedicated performans test suite'i:</strong> Buyuk veri setleri ile ozel performans testleri</li>
+      <li><strong>Aynı DB motoru ile test:</strong> Testcontainers ile PostgreSQL/MySQL container'ı çalıştır</li>
+      <li><strong>Anonimleştirilmiş production verisi:</strong> Gerçek veri hacimleriyle test pipeline'ı</li>
+      <li><strong>Dedicated performans test suite'i:</strong> Büyük veri setleri ile özel performans testleri</li>
     </ol>
   </div>
 
@@ -261,10 +261,10 @@ SET GLOBAL slow_query_log_file = '/var/log/mysql/slow.log';</code></pre>
 
   <div class="concept-box">
     <h4>Testcontainers Nedir?</h4>
-    <p>Testcontainers, testler sirasinda Docker container'lari baslatip yoneten bir Java kutuphanesidir. Her test icin temiz bir veritabani instance'i saglar ve test bittiginde otomatik olarak temizler.</p>
+    <p>Testcontainers, testler sırasında Docker container'ları başlatıp yöneten bir Java kütüphanesidir. Her test için temiz bir veritabanı instance'ı sağlar ve test bittiğinde otomatik olarak temizler.</p>
   </div>
 
-  <h4>Maven Bagimliligi</h4>
+  <h4>Maven Bağımlılığı</h4>
 
 <pre><code class="language-xml">&lt;dependency&gt;
     &lt;groupId&gt;org.testcontainers&lt;/groupId&gt;
@@ -302,14 +302,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 @Testcontainers
 class OrderRepositoryIntegrationTest {
 
-    // Her test sinifi icin bir PostgreSQL container'i baslatilir
+    // Her test sınıfı için bir PostgreSQL container'ı başlatılır
     @Container
     static PostgreSQLContainer&lt;?&gt; postgres = new PostgreSQLContainer&lt;&gt;("postgres:16-alpine")
         .withDatabaseName("testdb")
         .withUsername("test")
         .withPassword("test");
 
-    // Spring Boot'un datasource ayarlarini container'a yonlendir
+    // Spring Boot'un datasource ayarlarını container'a yönlendir
     @DynamicPropertySource
     static void configureProperties(DynamicPropertyRegistry registry) {
         registry.add("spring.datasource.url", postgres::getJdbcUrl);
@@ -327,9 +327,9 @@ class OrderRepositoryIntegrationTest {
 
     @Test
     void shouldFindOrdersWithItems() {
-        // Given: Test verisi olustur
+        // Given: Test verisi oluştur
         Product product = new Product();
-        product.setName("Test Urun");
+        product.setName("Test Ürün");
         product.setPrice(new BigDecimal("99.90"));
         productRepository.save(product);
 
@@ -338,17 +338,17 @@ class OrderRepositoryIntegrationTest {
         order.setCreatedAt(LocalDateTime.now());
         orderRepository.save(order);
 
-        // When: Gercek PostgreSQL uzerinde sorgu calistir
+        // When: Gerçek PostgreSQL üzerinde sorgu çalıştır
         List&lt;Order&gt; orders = orderRepository.findByStatus("PENDING");
 
-        // Then: Sonuclari dogrula
+        // Then: Sonuçları doğrula
         assertThat(orders).hasSize(1);
         assertThat(orders.get(0).getStatus()).isEqualTo("PENDING");
     }
 
     @Test
     void shouldHandleBulkOperationsEfficiently() {
-        // Buyuk veri seti ile performans testi
+        // Büyük veri seti ile performans testi
         for (int i = 0; i &lt; 1000; i++) {
             Product p = new Product();
             p.setName("Product " + i);
@@ -356,35 +356,35 @@ class OrderRepositoryIntegrationTest {
             productRepository.save(p);
         }
 
-        // Gercek DB uzerinde sorgu performansini test et
+        // Gerçek DB üzerinde sorgu performansını test et
         long start = System.currentTimeMillis();
         List&lt;Product&gt; products = productRepository.findAll();
         long duration = System.currentTimeMillis() - start;
 
         assertThat(products).hasSize(1000);
-        assertThat(duration).isLessThan(5000); // 5 saniyeden kisa olmali
+        assertThat(duration).isLessThan(5000); // 5 saniyeden kısa olmalı
     }
 }</code></pre>
 
   <div class="tip-box">
-    <p><strong>Ipucu:</strong> <code>@Container</code> anotasyonu ile isaretlenen container, test sinifi baslamadan once otomatik olarak baslatilir ve testler bittikten sonra durdurulur. <code>@DynamicPropertySource</code> sayesinde Spring Boot'un veritabani ayarlari, container'in dinamik port ve URL bilgilerine yonlendirilir.</p>
+    <p><strong>İpucu:</strong> <code>@Container</code> anotasyonu ile işaretlenen container, test sınıfı başlamadan önce otomatik olarak başlatılır ve testler bittikten sonra durdurulur. <code>@DynamicPropertySource</code> sayesinde Spring Boot'un veritabanı ayarları, container'ın dinamik port ve URL bilgilerine yönlendirilir.</p>
   </div>
 
-  <h4>application-test.yml Konfigurasyonu</h4>
+  <h4>application-test.yml Konfigürasyonu</h4>
 
 <pre><code class="language-yaml"># src/test/resources/application-test.yml
 spring:
   jpa:
     hibernate:
-      ddl-auto: create-drop  # Test icin her seferinde yeniden olustur
-    show-sql: false           # Test ciktisini temiz tut
+      ddl-auto: create-drop  # Test için her seferinde yeniden oluştur
+    show-sql: false           # Test çıktısını temiz tut
     properties:
       hibernate:
         format_sql: true
-        generate_statistics: true  # Hibernate istatistiklerini ac
-        session.events.log.LOG_QUERIES_SLOWER_THAN_MS: 500  # 500ms'den yavas sorgulari logla
+        generate_statistics: true  # Hibernate istatistiklerini aç
+        session.events.log.LOG_QUERIES_SLOWER_THAN_MS: 500  # 500ms'den yavaş sorguları logla
 
-  # Testcontainers kullanildiginda datasource ayarlari
+  # Testcontainers kullanıldığında datasource ayarları
   # DynamicPropertySource ile override edilir
   datasource:
     driver-class-name: org.postgresql.Driver
@@ -392,29 +392,29 @@ spring:
 logging:
   level:
     org.hibernate.stat: DEBUG        # Hibernate istatistikleri
-    org.hibernate.SQL: WARN          # SQL loglarini sadece uyari seviyesinde goster</code></pre>
+    org.hibernate.SQL: WARN          # SQL loglarını sadece uyarı seviyesinde göster</code></pre>
 
-  <h3>24.4 Anonimlestirilmis Production Verisi</h3>
+  <h3>24.4 Anonimleştirilmiş Production Verisi</h3>
 
   <div class="concept-box">
-    <h4>Neden Anonimlestirilmis Veri?</h4>
-    <p>Gercek performans testleri icin gercek veri hacmi gerekir. Ancak production verisinde hassas bilgiler (kredi karti, email, isim) vardir. Cozum: Hassas verileri cikarip veri hacmini korumak.</p>
+    <h4>Neden Anonimleştirilmiş Veri?</h4>
+    <p>Gerçek performans testleri için gerçek veri hacmi gerekir. Ancak production verisinde hassas bilgiler (kredi kartı, email, isim) vardır. Çözüm: Hassas verileri çıkarıp veri hacmini korumak.</p>
   </div>
 
   <div class="good-practice">
-    <h4>Anonimlestirilecek Veriler</h4>
+    <h4>Anonimleştirilecek Veriler</h4>
     <ul>
-      <li><strong>Kredi karti numaralari:</strong> <code>**** **** **** 1234</code> gibi maskelenir</li>
-      <li><strong>Email adresleri:</strong> <code>user_12345@anonymous.test</code> ile degistirilir</li>
-      <li><strong>Isim ve soyisim:</strong> Rastgele degerlerle degistirilir</li>
-      <li><strong>Telefon numaralari:</strong> Maskelenir veya rastgele uretilir</li>
+      <li><strong>Kredi kartı numaraları:</strong> <code>**** **** **** 1234</code> gibi maskelenir</li>
+      <li><strong>Email adresleri:</strong> <code>user_12345@anonymous.test</code> ile değiştirilir</li>
+      <li><strong>İsim ve soyisim:</strong> Rastgele değerlerle değiştirilir</li>
+      <li><strong>Telefon numaraları:</strong> Maskelenir veya rastgele üretilir</li>
     </ul>
-    <p><strong>Korunan:</strong> Veri hacmi (milyon satir), iliski yapilari, veri dagilimi — performans testleri icin bunlar kritiktir.</p>
+    <p><strong>Korunan:</strong> Veri hacmi (milyon satır), ilişki yapıları, veri dağılımı — performans testleri için bunlar kritiktir.</p>
   </div>
 
-<pre><code class="language-sql">-- Ornek: Production verisini anonimlestirilmis test verisine donusturme
--- 1. Production dump'ini al
--- 2. Hassas verileri anonimlestr
+<pre><code class="language-sql">-- Örnek: Production verisini anonimleştirilmiş test verisine dönüştürme
+-- 1. Production dump'ını al
+-- 2. Hassas verileri anonimleştir
 
 UPDATE customers SET
     first_name = 'User_' || id,
@@ -424,24 +424,24 @@ UPDATE customers SET
     credit_card = NULL
 WHERE id &gt; 0;
 
--- 3. Veri hacmi korunur: 5 milyon musteri, 20 milyon siparis aynen kalir
--- 4. Bu veri seti ile performans testleri gercekci sonuclar verir</code></pre>
+-- 3. Veri hacmi korunur: 5 milyon müşteri, 20 milyon sipariş aynen kalır
+-- 4. Bu veri seti ile performans testleri gerçekçi sonuçlar verir</code></pre>
 
-  <h3>24.5 SQL Monitoring: show-sql Yerine Dogru Araclar</h3>
+  <h3>24.5 SQL Monitoring: show-sql Yerine Doğru Araçlar</h3>
 
   <div class="bad-practice">
-    <h4>YANLIS -- spring.jpa.show-sql=true</h4>
-    <p><code>show-sql</code> sadece SQL'i konsola yazdirir. Parametreleri gostermez, istatistik toplamaz, yavasliga sebep olabilir.</p>
-<pre><code class="language-yaml"># Bunu kullanmayin (ozellikle test pipeline'da)
+    <h4>YANLIŞ -- spring.jpa.show-sql=true</h4>
+    <p><code>show-sql</code> sadece SQL'i konsola yazdırır. Parametreleri göstermez, istatistik toplamaz, yavaşlığa sebep olabilir.</p>
+<pre><code class="language-yaml"># Bunu kullanmayın (özellikle test pipeline'da)
 spring:
   jpa:
-    show-sql: true  # Parametreleri gostermez, performansi etkiler</code></pre>
+    show-sql: true  # Parametreleri göstermez, performansı etkiler</code></pre>
   </div>
 
   <div class="good-practice">
-    <h4>DOGRU -- datasource-proxy veya p6spy kullanin</h4>
-    <p>Bu araclar SQL sorgularini parametreleriyle birlikte loglar, calisma surelerini olcer ve sorgu sayisini takip eder.</p>
-<pre><code class="language-xml">&lt;!-- datasource-proxy Maven bagimliligi --&gt;
+    <h4>DOĞRU -- datasource-proxy veya p6spy kullanın</h4>
+    <p>Bu araçlar SQL sorgularını parametreleriyle birlikte loglar, çalışma sürelerini ölçer ve sorgu sayısını takip eder.</p>
+<pre><code class="language-xml">&lt;!-- datasource-proxy Maven bağımlılığı --&gt;
 &lt;dependency&gt;
     &lt;groupId&gt;net.ttddyy&lt;/groupId&gt;
     &lt;artifactId&gt;datasource-proxy&lt;/artifactId&gt;
@@ -456,7 +456,7 @@ spring:
 &lt;/dependency&gt;</code></pre>
   </div>
 
-<pre><code class="language-java">// datasource-proxy ile SQL monitoring konfigurasyonu
+<pre><code class="language-java">// datasource-proxy ile SQL monitoring konfigürasyonu
 @Configuration
 public class DataSourceProxyConfig {
 
@@ -465,51 +465,51 @@ public class DataSourceProxyConfig {
         return ProxyDataSourceBuilder.create(originalDataSource)
             .name("SQL-Log")
             .logQueryBySlf4j(SLF4JLogLevel.INFO)  // SLF4J ile logla
-            .multiline()                           // SQL'i okunakli formatla
-            .countQuery()                          // Sorgu sayisini takip et
+            .multiline()                           // SQL'i okunaklı formatla
+            .countQuery()                          // Sorgu sayısını takip et
             .build();
     }
 }</code></pre>
 
   <div class="tip-box">
-    <p><strong>datasource-proxy vs p6spy:</strong> Her ikisi de SQL sorgularini parametreleriyle birlikte loglar. <code>datasource-proxy</code> daha hafiftir ve Spring Boot ile entegrasyonu kolaydir. <code>p6spy</code> ise daha eski ve yaygin kullanilan bir alternatiftir. Test pipeline'larinda bu araclardan birini kullanarak N+1 gibi sorunlari otomatik olarak tespit edebilirsiniz.</p>
+    <p><strong>datasource-proxy vs p6spy:</strong> Her ikisi de SQL sorgularını parametreleriyle birlikte loglar. <code>datasource-proxy</code> daha hafiftir ve Spring Boot ile entegrasyonu kolaydır. <code>p6spy</code> ise daha eski ve yaygın kullanılan bir alternatiftir. Test pipeline'larında bu araçlardan birini kullanarak N+1 gibi sorunları otomatik olarak tespit edebilirsiniz.</p>
   </div>
 
   <div class="warning-box">
-    <p><strong>Thorben'in Son Uyarisi:</strong> "Production'da calismiyorsa sikayet etmeyin, daha once hic kontrol etmediyseniz." Gercek veritabani, gercek veri hacmi ve gercek sorgularla test etmek her gelistiricinin sorumlulugudur. H2 ile yazilan testler gecse bile, production'da sorun yasanabilir.</p>
+    <p><strong>Thorben'in Son Uyarısı:</strong> "Production'da çalışmıyorsa şikayet etmeyin, daha önce hiç kontrol etmediyseniz." Gerçek veritabanı, gerçek veri hacmi ve gerçek sorgularla test etmek her geliştiricinin sorumluluğudur. H2 ile yazılan testler geçse bile, production'da sorun yaşanabilir.</p>
   </div>
 
   <div class="quiz-container" data-section="24">
-    <h3 class="quiz-title">Bilgi Kontrolu</h3>
+    <h3 class="quiz-title">Bilgi Kontrolü</h3>
     <div class="quiz-question" data-correct="C">
-      <p class="question-text">1. H2 in-memory database ile test etmenin en buyuk riski nedir?</p>
+      <p class="question-text">1. H2 in-memory database ile test etmenin en büyük riski nedir?</p>
       <div class="quiz-options">
-        <button class="quiz-option" data-value="A">A) H2 cok yavas calisir</button>
+        <button class="quiz-option" data-value="A">A) H2 çok yavaş çalışır</button>
         <button class="quiz-option" data-value="B">B) H2 transaction desteklemez</button>
-        <button class="quiz-option" data-value="C">C) SQL uyumlulugu sinirlidir, dialect farkliliklari vardir ve kucuk veri setleri performans sorunlarini gizler</button>
+        <button class="quiz-option" data-value="C">C) SQL uyumluluğu sınırlıdır, dialect farklılıkları vardır ve küçük veri setleri performans sorunlarını gizler</button>
       </div>
-      <div class="quiz-feedback correct-feedback">&#10003; Dogru! H2'nin SQL uyumlulugu sinirlidir ve birkac duzine kayit ile calistirilan testler, milyonlarca kayit iceren production'daki performans sorunlarini gosteremez.</div>
-      <div class="quiz-feedback incorrect-feedback">&#10007; Yanlis. Dogru cevap C: H2'nin SQL dialect'i gercek veritabanlariyla tam uyumlu degildir ve kucuk veri setleri performans sorunlarini gizler. Production'da milyonlarca kayit oldugundan, H2 testleri yaniltici olabilir.</div>
+      <div class="quiz-feedback correct-feedback">&#10003; Doğru! H2'nin SQL uyumluluğu sınırlıdır ve birkaç düzine kayıt ile çalıştırılan testler, milyonlarca kayıt içeren production'daki performans sorunlarını gösteremez.</div>
+      <div class="quiz-feedback incorrect-feedback">&#10007; Yanlış. Doğru cevap C: H2'nin SQL dialect'i gerçek veritabanlarıyla tam uyumlu değildir ve küçük veri setleri performans sorunlarını gizler. Production'da milyonlarca kayıt olduğundan, H2 testleri yanıltıcı olabilir.</div>
     </div>
     <div class="quiz-question" data-correct="B">
-      <p class="question-text">2. Testcontainers'da @DynamicPropertySource ne ise yarar?</p>
+      <p class="question-text">2. Testcontainers'da @DynamicPropertySource ne işe yarar?</p>
       <div class="quiz-options">
-        <button class="quiz-option" data-value="A">A) Docker container'ini baslatir</button>
-        <button class="quiz-option" data-value="B">B) Spring Boot'un datasource ayarlarini container'in dinamik URL ve portuna yonlendirir</button>
-        <button class="quiz-option" data-value="C">C) Test verisi olusturur</button>
+        <button class="quiz-option" data-value="A">A) Docker container'ını başlatır</button>
+        <button class="quiz-option" data-value="B">B) Spring Boot'un datasource ayarlarını container'ın dinamik URL ve portuna yönlendirir</button>
+        <button class="quiz-option" data-value="C">C) Test verisi oluşturur</button>
       </div>
-      <div class="quiz-feedback correct-feedback">&#10003; Dogru! @DynamicPropertySource, container her seferinde farkli bir portta basladigi icin Spring Boot'un datasource konfigurasyonunu calisma zamaninda dinamik olarak ayarlar.</div>
-      <div class="quiz-feedback incorrect-feedback">&#10007; Yanlis. Dogru cevap B: @DynamicPropertySource, Testcontainers'in dinamik olarak atadigi port ve URL bilgilerini Spring Boot'un datasource ayarlarina baglar. Container her seferinde farkli bir portta baslayabilecegi icin bu dinamik yapilandirma gereklidir.</div>
+      <div class="quiz-feedback correct-feedback">&#10003; Doğru! @DynamicPropertySource, container her seferinde farklı bir portta başladığı için Spring Boot'un datasource konfigürasyonunu çalışma zamanında dinamik olarak ayarlar.</div>
+      <div class="quiz-feedback incorrect-feedback">&#10007; Yanlış. Doğru cevap B: @DynamicPropertySource, Testcontainers'in dinamik olarak atadığı port ve URL bilgilerini Spring Boot'un datasource ayarlarına bağlar. Container her seferinde farklı bir portta başlayabileceği için bu dinamik yapılandırma gereklidir.</div>
     </div>
     <div class="quiz-question" data-correct="A">
-      <p class="question-text">3. Production verisini test icin kullanirken neden anonimlestirilmesi gerekir?</p>
+      <p class="question-text">3. Production verisini test için kullanırken neden anonimleştirilmesi gerekir?</p>
       <div class="quiz-options">
-        <button class="quiz-option" data-value="A">A) Kredi karti, email, isim gibi hassas veriler guvenlik ve gizlilik acisindan korunmalidir, ancak veri hacmi performans testleri icin korunmalidir</button>
-        <button class="quiz-option" data-value="B">B) Anonimlestirilmis veri daha hizli sorgulanir</button>
-        <button class="quiz-option" data-value="C">C) Anonimlestirilmis veri daha az yer kaplar</button>
+        <button class="quiz-option" data-value="A">A) Kredi kartı, email, isim gibi hassas veriler güvenlik ve gizlilik açısından korunmalıdır, ancak veri hacmi performans testleri için korunmalıdır</button>
+        <button class="quiz-option" data-value="B">B) Anonimleştirilmiş veri daha hızlı sorgulanır</button>
+        <button class="quiz-option" data-value="C">C) Anonimleştirilmiş veri daha az yer kaplar</button>
       </div>
-      <div class="quiz-feedback correct-feedback">&#10003; Dogru! Hassas veriler (kredi karti, email, isim) gizlilik ve guvenlik acisindan cikarilmali veya maskelenmeli, ancak veri hacmi (milyon satir) ve veri dagilimi korunmalidir ki performans testleri gercekci sonuc versin.</div>
-      <div class="quiz-feedback incorrect-feedback">&#10007; Yanlis. Dogru cevap A: Anonimlestirilmenin amaci hassas verileri (kredi karti, email, isim) korumaktir. Veri hacmi ve dagilimi korunarak performans testlerinin gercekci sonuc vermesi saglanir.</div>
+      <div class="quiz-feedback correct-feedback">&#10003; Doğru! Hassas veriler (kredi kartı, email, isim) gizlilik ve güvenlik açısından çıkarılmalı veya maskelenmeli, ancak veri hacmi (milyon satır) ve veri dağılımı korunmalıdır ki performans testleri gerçekçi sonuç versin.</div>
+      <div class="quiz-feedback incorrect-feedback">&#10007; Yanlış. Doğru cevap A: Anonimleştirilmenin amacı hassas verileri (kredi kartı, email, isim) korumaktır. Veri hacmi ve dağılımı korunarak performans testlerinin gerçekçi sonuç vermesi sağlanır.</div>
     </div>
   </div>
 </section>

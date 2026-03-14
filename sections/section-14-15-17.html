@@ -2,56 +2,56 @@
 <section class="tutorial-section" id="section-14" data-section="14">
   <h2 class="section-title"><span class="section-number">14</span> REST API'lerde PUT ve PATCH Best Practices</h2>
 
-  <h3>14.1 PUT vs PATCH Farki</h3>
+  <h3>14.1 PUT vs PATCH Farkı</h3>
 
   <div class="comparison-box">
     <table class="info-table">
       <thead>
         <tr>
-          <th>Ozellik</th>
-          <th>PUT (Tam Degistirme)</th>
-          <th>PATCH (Kismi Guncelleme)</th>
+          <th>Özellik</th>
+          <th>PUT (Tam Değiştirme)</th>
+          <th>PATCH (Kısmi Güncelleme)</th>
         </tr>
       </thead>
       <tbody>
         <tr>
           <td><strong>Anlam</strong></td>
-          <td>"Gonderdigimle tamamen degistir"</td>
-          <td>"Sadece gonderdigim alanlari guncelle"</td>
+          <td>"Gönderdiğimle tamamen değiştir"</td>
+          <td>"Sadece gönderdiğim alanları güncelle"</td>
         </tr>
         <tr>
           <td><strong>Gelen JSON</strong></td>
-          <td>TUM alanlar gonderilmeli</td>
-          <td>Sadece degisecek alanlar</td>
+          <td>TÜM alanlar gönderilmeli</td>
+          <td>Sadece değişecek alanlar</td>
         </tr>
         <tr>
-          <td><strong>Gonderilmeyen alan</strong></td>
-          <td>null / varsayilan olur</td>
-          <td><strong>Mevcut degeri korur</strong></td>
+          <td><strong>Gönderilmeyen alan</strong></td>
+          <td>null / varsayılan olur</td>
+          <td><strong>Mevcut değeri korur</strong></td>
         </tr>
       </tbody>
     </table>
   </div>
 
-  <h3>14.2 Altin Kural: Entity'yi Controller'da KULLANMA!</h3>
+  <h3>14.2 Altın Kural: Entity'yi Controller'da KULLANMA!</h3>
 
   <div class="concept-box">
-    <h4>Entity vs DTO Kurali</h4>
-    <p>Entity'yi dogrudan JSON'a baglamak guvenlik acigi olusturur. Kullanici ID, createdAt gibi alanlari degistirebilir. Her zaman DTO kullanin.</p>
+    <h4>Entity vs DTO Kuralı</h4>
+    <p>Entity'yi doğrudan JSON'a bağlamak güvenlik açığı oluşturur. Kullanıcı ID, createdAt gibi alanları değiştirebilir. Her zaman DTO kullanın.</p>
   </div>
 
   <div class="bad-practice">
-    <h4>YANLIS -- Entity'yi dogrudan JSON'a baglamak</h4>
+    <h4>YANLIŞ -- Entity'yi doğrudan JSON'a bağlamak</h4>
 <pre><code class="language-java">@PutMapping("/{id}")
 public void update(@PathVariable Long id, @RequestBody Product product) {
-    // product DETACHED! Persistence Context'te degil!
-    // Guvenlik acigi: Kullanici ID, createdAt gibi alanlari degistirebilir!
+    // product DETACHED! Persistence Context'te değil!
+    // Güvenlik açığı: Kullanıcı ID, createdAt gibi alanları değiştirebilir!
     productRepository.save(product);  // Tehlikeli!
 }</code></pre>
   </div>
 
   <div class="good-practice">
-    <h4>DOGRU -- DTO kullan</h4>
+    <h4>DOĞRU -- DTO kullan</h4>
 <pre><code class="language-java">@PutMapping("/{id}")
 public ResponseEntity&lt;Void&gt; update(@PathVariable Long id,
                                    @Valid @RequestBody ProductPutDTO dto) {
@@ -60,7 +60,7 @@ public ResponseEntity&lt;Void&gt; update(@PathVariable Long id,
 }</code></pre>
   </div>
 
-  <h3>14.3 PUT Islemi (Tam Degistirme)</h3>
+  <h3>14.3 PUT İşlemi (Tam Değiştirme)</h3>
 
 <pre><code class="language-java">// DTO
 public class ProductPutDTO {
@@ -68,7 +68,7 @@ public class ProductPutDTO {
     private String name;
     @NotNull
     private BigDecimal price;
-    private String description;  // null gelebilir -- PUT'ta sorun degil
+    private String description;  // null gelebilir -- PUT'ta sorun değil
     @NotNull
     private String category;
     // Getter/Setter...
@@ -85,9 +85,9 @@ public class ProductService {
     public void updateProductPut(Long id, ProductPutDTO dto) {
         // 1. Fetch -- Nesne MANAGED olur
         Product product = repository.findById(id)
-            .orElseThrow(() -&gt; new ResourceNotFoundException("Urun bulunamadi: " + id));
+            .orElseThrow(() -&gt; new ResourceNotFoundException("Ürün bulunamadı: " + id));
 
-        // 2. Tum alanlari ezerek yaz (overwrite)
+        // 2. Tüm alanları ezerek yaz (overwrite)
         product.setName(dto.getName());
         product.setPrice(dto.getPrice());
         product.setDescription(dto.getDescription());  // null geldiyse DB'de de null olur
@@ -98,14 +98,14 @@ public class ProductService {
 }</code></pre>
 
   <div class="tip-box">
-    <p><strong>Ipucu:</strong> PUT isleminde <code>save()</code> cagrisi yapmaniza gerek yoktur. Entity managed durumda oldugu icin Dirty Checking mekanizmasi degisiklikleri otomatik olarak veritabanina yansitir.</p>
+    <p><strong>İpucu:</strong> PUT işleminde <code>save()</code> çağrısı yapmanıza gerek yoktur. Entity managed durumda olduğu için Dirty Checking mekanizması değişiklikleri otomatik olarak veritabanına yansıtır.</p>
   </div>
 
-  <h3>14.4 PATCH Islemi -- Yontem 1: Map&lt;String, Object&gt;</h3>
+  <h3>14.4 PATCH İşlemi -- Yöntem 1: Map&lt;String, Object&gt;</h3>
 
   <div class="concept-box">
-    <h4>Map Yaklasimi</h4>
-    <p>"Gonderilmeyen alan" ile "null gonderilen alan" ayrimini yapmanin en basit yolu Map kullanmaktir. JSON'da gonderilen anahtarlari <code>containsKey()</code> ile kontrol edersiniz.</p>
+    <h4>Map Yaklaşımı</h4>
+    <p>"Gönderilmeyen alan" ile "null gönderilen alan" ayrımını yapmanın en basit yolu Map kullanmaktır. JSON'da gönderilen anahtarları <code>containsKey()</code> ile kontrol edersiniz.</p>
   </div>
 
 <pre><code class="language-java">// Controller
@@ -124,7 +124,7 @@ public class ProductService {
     public void patchProduct(Long id, Map&lt;String, Object&gt; updates) {
         Product product = repository.findById(id).orElseThrow();
 
-        // Sadece JSON'da GONDERILEN anahtarlari guncelle
+        // Sadece JSON'da GÖNDERİLEN anahtarları güncelle
         if (updates.containsKey("name")) {
             product.setName((String) updates.get("name"));
         }
@@ -143,12 +143,12 @@ public class ProductService {
     }
 }</code></pre>
 
-  <h3>14.5 PATCH Islemi -- Yontem 2: DTO + Tip Guvenligi</h3>
+  <h3>14.5 PATCH İşlemi -- Yöntem 2: DTO + Tip Güvenliği</h3>
 
-<pre><code class="language-java">// PATCH DTO -- Tum alanlar nullable
+<pre><code class="language-java">// PATCH DTO -- Tüm alanlar nullable
 public class ProductPatchDTO {
-    private String name;         // null = gonderilmedi
-    private BigDecimal price;    // null = gonderilmedi
+    private String name;         // null = gönderilmedi
+    private BigDecimal price;    // null = gönderilmedi
     private String description;
     private String category;
     // Getter/Setter...
@@ -172,63 +172,63 @@ public void patchProductWithDto(Long id, ProductPatchDTO dto) {
         product.setCategory(dto.getCategory());
     }
 
-    // KISITLAMA: Bu yaklasimda client bir alani bilerek null yapamaz!
-    // Cunku null = "gonderilmedi" ile null = "temizle" ayrimi yapilamiyor.
+    // KISITLAMA: Bu yaklaşımda client bir alanı bilerek null yapamaz!
+    // Çünkü null = "gönderilmedi" ile null = "temizle" ayrımı yapılamıyor.
 }</code></pre>
 
   <div class="warning-box">
-    <p><strong>Uyari:</strong> DTO + Tip Guvenligi yonteminde onemli bir kisitlama vardir: Client bir alani bilerek <code>null</code> yapamaz. Cunku <code>null = "gonderilmedi"</code> ile <code>null = "temizle"</code> ayrimi yapilamaz. Bu sorunu cozmek icin <strong>JsonNullable</strong> kullanin (Bolum 15.3).</p>
+    <p><strong>Uyarı:</strong> DTO + Tip Güvenliği yönteminde önemli bir kısıtlama vardır: Client bir alanı bilerek <code>null</code> yapamaz. Çünkü <code>null = "gönderilmedi"</code> ile <code>null = "temizle"</code> ayrımı yapılamaz. Bu sorunu çözmek için <strong>JsonNullable</strong> kullanın (Bölüm 15.3).</p>
   </div>
 
   <div class="quiz-container" data-section="14">
-    <h3 class="quiz-title">Bilgi Kontrolu</h3>
+    <h3 class="quiz-title">Bilgi Kontrolü</h3>
     <div class="quiz-question" data-correct="B">
-      <p class="question-text">1. PUT ve PATCH arasindaki temel fark nedir?</p>
+      <p class="question-text">1. PUT ve PATCH arasındaki temel fark nedir?</p>
       <div class="quiz-options">
-        <button class="quiz-option" data-value="A">A) PUT sadece yeni kayit olusturur, PATCH gunceller</button>
-        <button class="quiz-option" data-value="B">B) PUT tum alanlari degistirir, PATCH sadece gonderilen alanlari gunceller</button>
-        <button class="quiz-option" data-value="C">C) PUT daha hizlidir, PATCH daha yavas calisir</button>
+        <button class="quiz-option" data-value="A">A) PUT sadece yeni kayıt oluşturur, PATCH günceller</button>
+        <button class="quiz-option" data-value="B">B) PUT tüm alanları değiştirir, PATCH sadece gönderilen alanları günceller</button>
+        <button class="quiz-option" data-value="C">C) PUT daha hızlıdır, PATCH daha yavaş çalışır</button>
       </div>
-      <div class="quiz-feedback correct-feedback">&#10003; Dogru! PUT "gonderdigimle tamamen degistir" anlamina gelirken, PATCH "sadece gonderdigim alanlari guncelle" anlamina gelir.</div>
-      <div class="quiz-feedback incorrect-feedback">&#10007; Yanlis. Dogru cevap B: PUT tum alanlari ezerek yazar (gonderilmeyen alanlar null olur), PATCH ise sadece gonderilen alanlari gunceller ve diger alanlara dokunmaz.</div>
+      <div class="quiz-feedback correct-feedback">&#10003; Doğru! PUT "gönderdiğimle tamamen değiştir" anlamına gelirken, PATCH "sadece gönderdiğim alanları güncelle" anlamına gelir.</div>
+      <div class="quiz-feedback incorrect-feedback">&#10007; Yanlış. Doğru cevap B: PUT tüm alanları ezerek yazar (gönderilmeyen alanlar null olur), PATCH ise sadece gönderilen alanları günceller ve diğer alanlara dokunmaz.</div>
     </div>
     <div class="quiz-question" data-correct="C">
-      <p class="question-text">2. Controller'da Entity yerine neden DTO kullanilmalidir?</p>
+      <p class="question-text">2. Controller'da Entity yerine neden DTO kullanılmalıdır?</p>
       <div class="quiz-options">
-        <button class="quiz-option" data-value="A">A) DTO'lar daha hizli serilesetirilir</button>
-        <button class="quiz-option" data-value="B">B) Entity'ler JSON formatini desteklemez</button>
-        <button class="quiz-option" data-value="C">C) Entity dogrudan baglama guvenlik acigi olusturur; kullanici ID, createdAt gibi alanlari degistirebilir</button>
+        <button class="quiz-option" data-value="A">A) DTO'lar daha hızlı serileştirilir</button>
+        <button class="quiz-option" data-value="B">B) Entity'ler JSON formatını desteklemez</button>
+        <button class="quiz-option" data-value="C">C) Entity doğrudan bağlama güvenlik açığı oluşturur; kullanıcı ID, createdAt gibi alanları değiştirebilir</button>
       </div>
-      <div class="quiz-feedback correct-feedback">&#10003; Dogru! Entity'yi dogrudan JSON'a baglamak, kullanicinin ID, createdAt gibi hassas alanlari degistirmesine olanak tanir. DTO kullanarak hangi alanlarin guncellenebilecegini kontrol edersiniz.</div>
-      <div class="quiz-feedback incorrect-feedback">&#10007; Yanlis. Dogru cevap C: Entity'yi dogrudan JSON'a baglamak guvenlik acigi olusturur. Kullanici ID, createdAt gibi alanlari degistirebilir ve Entity DETACHED durumda olur.</div>
+      <div class="quiz-feedback correct-feedback">&#10003; Doğru! Entity'yi doğrudan JSON'a bağlamak, kullanıcının ID, createdAt gibi hassas alanları değiştirmesine olanak tanır. DTO kullanarak hangi alanların güncellenebileceğini kontrol edersiniz.</div>
+      <div class="quiz-feedback incorrect-feedback">&#10007; Yanlış. Doğru cevap C: Entity'yi doğrudan JSON'a bağlamak güvenlik açığı oluşturur. Kullanıcı ID, createdAt gibi alanları değiştirebilir ve Entity DETACHED durumda olur.</div>
     </div>
     <div class="quiz-question" data-correct="A">
-      <p class="question-text">3. Managed Entity guncellendiginde neden save() cagrisina gerek yoktur?</p>
+      <p class="question-text">3. Managed Entity güncellendiğinde neden save() çağrısına gerek yoktur?</p>
       <div class="quiz-options">
-        <button class="quiz-option" data-value="A">A) Dirty Checking mekanizmasi degisiklikleri otomatik algilar ve UPDATE sorgusu olusturur</button>
-        <button class="quiz-option" data-value="B">B) Spring Boot otomatik kaydetme ozelligi vardir</button>
-        <button class="quiz-option" data-value="C">C) @Transactional anotasyonu save() islevini yerine getirir</button>
+        <button class="quiz-option" data-value="A">A) Dirty Checking mekanizması değişiklikleri otomatik algılar ve UPDATE sorgusu oluşturur</button>
+        <button class="quiz-option" data-value="B">B) Spring Boot otomatik kaydetme özelliği vardır</button>
+        <button class="quiz-option" data-value="C">C) @Transactional anotasyonu save() işlevini yerine getirir</button>
       </div>
-      <div class="quiz-feedback correct-feedback">&#10003; Dogru! Managed durumundaki Entity'ler icin Hibernate'in Dirty Checking mekanizmasi, transaction sonunda degisiklikleri otomatik olarak veritabanina yansitir.</div>
-      <div class="quiz-feedback incorrect-feedback">&#10007; Yanlis. Dogru cevap A: Dirty Checking mekanizmasi, Persistence Context'teki managed Entity'lerin degisikliklerini otomatik olarak algilar ve transaction commit sirasinda UPDATE sorgusu olusturur.</div>
+      <div class="quiz-feedback correct-feedback">&#10003; Doğru! Managed durumundaki Entity'ler için Hibernate'in Dirty Checking mekanizması, transaction sonunda değişiklikleri otomatik olarak veritabanına yansıtır.</div>
+      <div class="quiz-feedback incorrect-feedback">&#10007; Yanlış. Doğru cevap A: Dirty Checking mekanizması, Persistence Context'teki managed Entity'lerin değişikliklerini otomatik olarak algılar ve transaction commit sırasında UPDATE sorgusu oluşturur.</div>
     </div>
   </div>
 </section>
 
-<!-- Section 15: DTO Mapping Araclari -->
+<!-- Section 15: DTO Mapping Araçları -->
 <section class="tutorial-section" id="section-15" data-section="15">
-  <h2 class="section-title"><span class="section-number">15</span> DTO Mapping Araclari: MapStruct, Jackson, JsonNullable</h2>
+  <h2 class="section-title"><span class="section-number">15</span> DTO Mapping Araçları: MapStruct, Jackson, JsonNullable</h2>
 
   <div class="concept-box">
-    <h4>Neden DTO Mapping Araci?</h4>
-    <p>30-40 alanli Entity'lerde elle <code>set/get</code> yazmak surdurulebilir degildir. Sektor bu boilerplate'i MapStruct, Jackson ve JsonNullable gibi araclarla cozer.</p>
+    <h4>Neden DTO Mapping Aracı?</h4>
+    <p>30-40 alanlı Entity'lerde elle <code>set/get</code> yazmak sürdürülebilir değildir. Sektör bu boilerplate'i MapStruct, Jackson ve JsonNullable gibi araçlarla çözer.</p>
   </div>
 
-  <h3>15.1 MapStruct (Sektor Standardi)</h3>
+  <h3>15.1 MapStruct (Sektör Standardı)</h3>
 
-  <p>MapStruct derleme zamaninda (compile-time) calisir, reflection kullanmaz, cok hizlidir.</p>
+  <p>MapStruct derleme zamanında (compile-time) çalışır, reflection kullanmaz, çok hızlıdır.</p>
 
-  <h4>Maven Bagimliligi</h4>
+  <h4>Maven Bağımlılığı</h4>
 
 <pre><code class="language-xml">&lt;dependency&gt;
     &lt;groupId&gt;org.mapstruct&lt;/groupId&gt;
@@ -242,38 +242,38 @@ public void patchProductWithDto(Long id, ProductPatchDTO dto) {
     &lt;scope&gt;provided&lt;/scope&gt;
 &lt;/dependency&gt;</code></pre>
 
-  <h4>Mapper Arayuzu</h4>
+  <h4>Mapper Arayüzü</h4>
 
 <pre><code class="language-java">import org.mapstruct.*;
 
 @Mapper(componentModel = "spring")
 public interface ProductMapper {
 
-    // Entity -&gt; DTO donusumu (Okuma icin)
+    // Entity -&gt; DTO dönüşümü (Okuma için)
     ProductResponseDTO toResponseDto(Product entity);
 
-    // DTO -&gt; Entity (Yeni kayit olusturma icin)
+    // DTO -&gt; Entity (Yeni kayıt oluşturma için)
     Product toEntity(ProductCreateDTO dto);
 
-    // PUT: DTO'daki HER SEYI Entity'nin uzerine yazar (null dahil)
+    // PUT: DTO'daki HER ŞEYİ Entity'nin üzerine yazar (null dahil)
     void updateFromPutDto(ProductPutDTO dto, @MappingTarget Product entity);
 
-    // PATCH: DTO'daki null olan alanlari ATLA, sadece dolu olanlari guncelle
+    // PATCH: DTO'daki null olan alanları ATLA, sadece dolu olanları güncelle
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
     void updateFromPatchDto(ProductPatchDTO dto, @MappingTarget Product entity);
 }</code></pre>
 
   <div class="concept-box">
     <h4>@MappingTarget Anotasyonu</h4>
-    <p><code>@MappingTarget</code> ile isaretlenen parametre, MapStruct'in uzerine yazacagi hedef nesnedir. Bu sayede mevcut bir Entity'yi DTO'daki degerlerle guncelleyebilirsiniz.</p>
+    <p><code>@MappingTarget</code> ile işaretlenen parametre, MapStruct'in üzerine yazacağı hedef nesnedir. Bu sayede mevcut bir Entity'yi DTO'daki değerlerle güncelleyebilirsiniz.</p>
   </div>
 
   <div class="concept-box">
     <h4>NullValuePropertyMappingStrategy.IGNORE</h4>
-    <p>PATCH islemlerinde <code>@BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)</code> kullanarak, DTO'daki null olan alanlar Entity'ye yazilmaz. Boylece sadece gonderilen alanlar guncellenir.</p>
+    <p>PATCH işlemlerinde <code>@BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)</code> kullanarak, DTO'daki null olan alanlar Entity'ye yazılmaz. Böylece sadece gönderilen alanlar güncellenir.</p>
   </div>
 
-  <h4>Servis Kullanimi (Boilerplate Sifir!)</h4>
+  <h4>Servis Kullanımı (Boilerplate Sıfır!)</h4>
 
 <pre><code class="language-java">@Service
 public class ProductService {
@@ -286,7 +286,7 @@ public class ProductService {
     public void putProduct(Long id, ProductPutDTO dto) {
         Product product = repository.findById(id).orElseThrow();
         mapper.updateFromPutDto(dto, product);
-        // Tum alanlar ezildi. Dirty Checking UPDATE atacak.
+        // Tüm alanlar ezildi. Dirty Checking UPDATE atacak.
     }
 
     // PATCH
@@ -294,7 +294,7 @@ public class ProductService {
     public void patchProduct(Long id, ProductPatchDTO dto) {
         Product product = repository.findById(id).orElseThrow();
         mapper.updateFromPatchDto(dto, product);
-        // Sadece null OLMAYAN alanlar guncellendi.
+        // Sadece null OLMAYAN alanlar güncellendi.
     }
 }</code></pre>
 
@@ -304,13 +304,13 @@ public class ProductService {
 public class ProductService {
 
     @Autowired private ProductRepository repository;
-    @Autowired private ObjectMapper objectMapper;  // Spring Boot otomatik saglar
+    @Autowired private ObjectMapper objectMapper;  // Spring Boot otomatik sağlar
 
     @Transactional
     public void patchProduct(Long id, JsonNode patchJson) throws IOException {
         Product product = repository.findById(id).orElseThrow();
 
-        // JSON'daki alanlari dogrudan Entity'nin uzerine "yamala"
+        // JSON'daki alanları doğrudan Entity'nin üzerine "yamala"
         objectMapper.readerForUpdating(product).readValue(patchJson);
 
         // Dirty Checking devreye girer, UPDATE atar.
@@ -326,17 +326,17 @@ public ResponseEntity&lt;Void&gt; patch(@PathVariable Long id,
 }</code></pre>
 
   <div class="warning-box">
-    <p><strong>Guvenlik Uyarisi:</strong> Bu yontemde Entity dogrudan JSON'a acilir. <code>@JsonIgnore</code> veya <code>@JsonProperty(access = READ_ONLY)</code> ile hassas alanlari (id, createdAt, role) koruyun.</p>
+    <p><strong>Güvenlik Uyarısı:</strong> Bu yöntemde Entity doğrudan JSON'a açılır. <code>@JsonIgnore</code> veya <code>@JsonProperty(access = READ_ONLY)</code> ile hassas alanları (id, createdAt, role) koruyun.</p>
   </div>
 
-  <h3>15.3 JsonNullable (Gercek RESTful PATCH)</h3>
+  <h3>15.3 JsonNullable (Gerçek RESTful PATCH)</h3>
 
   <div class="concept-box">
     <h4>JsonNullable Nedir?</h4>
-    <p>"Gonderilmedi" ile "bilerek null yapti" ayrimini yapar. Uc durumu ifade eder: <code>undefined()</code> (JSON'da alan yok -- dokunma), <code>of("deger")</code> (JSON'da deger var -- guncelle), <code>of(null)</code> (JSON'da alan var ama degeri null -- null yap).</p>
+    <p>"Gönderilmedi" ile "bilerek null yaptı" ayrımını yapar. Üç durumu ifade eder: <code>undefined()</code> (JSON'da alan yok -- dokunma), <code>of("deger")</code> (JSON'da değer var -- güncelle), <code>of(null)</code> (JSON'da alan var ama değeri null -- null yap).</p>
   </div>
 
-  <h4>Maven Bagimliligi</h4>
+  <h4>Maven Bağımlılığı</h4>
 
 <pre><code class="language-xml">&lt;dependency&gt;
     &lt;groupId&gt;org.openapitools&lt;/groupId&gt;
@@ -344,7 +344,7 @@ public ResponseEntity&lt;Void&gt; patch(@PathVariable Long id,
     &lt;version&gt;0.2.6&lt;/version&gt;
 &lt;/dependency&gt;</code></pre>
 
-  <h4>DTO Tanimi</h4>
+  <h4>DTO Tanımı</h4>
 
 <pre><code class="language-java">import org.openapitools.jackson.nullable.JsonNullable;
 
@@ -352,8 +352,8 @@ public class ProductPatchDTO {
 
     // JsonNullable 3 durumu ifade eder:
     // 1. undefined() -&gt; JSON'da bu alan YOK (dokunma)
-    // 2. of("deger")  -&gt; JSON'da deger var (guncelle)
-    // 3. of(null)     -&gt; JSON'da alan var ama degeri null (null yap)
+    // 2. of("deger")  -&gt; JSON'da değer var (güncelle)
+    // 3. of(null)     -&gt; JSON'da alan var ama değeri null (null yap)
     private JsonNullable&lt;String&gt; name = JsonNullable.undefined();
     private JsonNullable&lt;BigDecimal&gt; price = JsonNullable.undefined();
     private JsonNullable&lt;String&gt; description = JsonNullable.undefined();
@@ -367,7 +367,7 @@ public class ProductPatchDTO {
 public void patchProduct(Long id, ProductPatchDTO dto) {
     Product product = repository.findById(id).orElseThrow();
 
-    // isPresent(): JSON'da bu anahtar var mi? (null olsa bile true doner)
+    // isPresent(): JSON'da bu anahtar var mı? (null olsa bile true döner)
     if (dto.getName().isPresent()) {
         product.setName(dto.getName().get());  // null da olabilir
     }
@@ -379,49 +379,49 @@ public void patchProduct(Long id, ProductPatchDTO dto) {
     }
 }</code></pre>
 
-  <h4>JSON Ornekleri</h4>
+  <h4>JSON Örnekleri</h4>
 
-<pre><code class="language-json">// Ismi guncelle, aciklamayi null yap, fiyata dokunma
-{ "name": "Yeni Isim", "description": null }
+<pre><code class="language-json">// İsmi güncelle, açıklamayı null yap, fiyata dokunma
+{ "name": "Yeni İsim", "description": null }
 // -&gt; name.isPresent() = true, name.get() = "Yeni Isim"
 // -&gt; description.isPresent() = true, description.get() = null
 // -&gt; price.isPresent() = false (dokunulmaz)</code></pre>
 
   <div class="tip-box">
-    <p><strong>Ipucu:</strong> JsonNullable, gercek RESTful PATCH semantigi icin en dogru cozumdur. <code>isPresent()</code> metodu JSON'da anahtarin var olup olmadigini kontrol eder -- deger <code>null</code> olsa bile <code>true</code> doner. Bu sayede "gonderilmedi" ile "bilerek null yapti" ayrimi net bir sekilde yapilabilir.</p>
+    <p><strong>İpucu:</strong> JsonNullable, gerçek RESTful PATCH semantiği için en doğru çözümdür. <code>isPresent()</code> metodu JSON'da anahtarın var olup olmadığını kontrol eder -- değer <code>null</code> olsa bile <code>true</code> döner. Bu sayede "gönderilmedi" ile "bilerek null yaptı" ayrımı net bir şekilde yapılabilir.</p>
   </div>
 
   <div class="quiz-container" data-section="15">
-    <h3 class="quiz-title">Bilgi Kontrolu</h3>
+    <h3 class="quiz-title">Bilgi Kontrolü</h3>
     <div class="quiz-question" data-correct="A">
-      <p class="question-text">1. MapStruct'in en buyuk avantaji nedir?</p>
+      <p class="question-text">1. MapStruct'in en büyük avantajı nedir?</p>
       <div class="quiz-options">
-        <button class="quiz-option" data-value="A">A) Derleme zamaninda calisir, reflection kullanmaz ve cok hizlidir</button>
-        <button class="quiz-option" data-value="B">B) Calisma zamaninda dinamik mapping yapar</button>
-        <button class="quiz-option" data-value="C">C) JSON serializasyon icin en iyi aractir</button>
+        <button class="quiz-option" data-value="A">A) Derleme zamanında çalışır, reflection kullanmaz ve çok hızlıdır</button>
+        <button class="quiz-option" data-value="B">B) Çalışma zamanında dinamik mapping yapar</button>
+        <button class="quiz-option" data-value="C">C) JSON serializasyon için en iyi araçtır</button>
       </div>
-      <div class="quiz-feedback correct-feedback">&#10003; Dogru! MapStruct compile-time'da kod uretir, reflection kullanmaz ve bu sayede calisma zamaninda cok hizli calisir.</div>
-      <div class="quiz-feedback incorrect-feedback">&#10007; Yanlis. Dogru cevap A: MapStruct derleme zamaninda (compile-time) calisir, reflection kullanmaz ve bu sayede cok hizli ve tip guvenli mapping saglar.</div>
+      <div class="quiz-feedback correct-feedback">&#10003; Doğru! MapStruct compile-time'da kod üretir, reflection kullanmaz ve bu sayede çalışma zamanında çok hızlı çalışır.</div>
+      <div class="quiz-feedback incorrect-feedback">&#10007; Yanlış. Doğru cevap A: MapStruct derleme zamanında (compile-time) çalışır, reflection kullanmaz ve bu sayede çok hızlı ve tip güvenli mapping sağlar.</div>
     </div>
     <div class="quiz-question" data-correct="C">
-      <p class="question-text">2. JsonNullable'in cozdugu temel problem nedir?</p>
+      <p class="question-text">2. JsonNullable'ın çözdüğü temel problem nedir?</p>
       <div class="quiz-options">
-        <button class="quiz-option" data-value="A">A) JSON parse performansini arttirir</button>
-        <button class="quiz-option" data-value="B">B) Null pointer exception'lari onler</button>
-        <button class="quiz-option" data-value="C">C) "Gonderilmedi" (undefined) ile "bilerek null yapti" ayrimini yapar</button>
+        <button class="quiz-option" data-value="A">A) JSON parse performansını artırır</button>
+        <button class="quiz-option" data-value="B">B) Null pointer exception'ları önler</button>
+        <button class="quiz-option" data-value="C">C) "Gönderilmedi" (undefined) ile "bilerek null yaptı" ayrımını yapar</button>
       </div>
-      <div class="quiz-feedback correct-feedback">&#10003; Dogru! JsonNullable uc durumu ayirt eder: undefined (alan gonderilmedi), of(deger) (deger var) ve of(null) (bilerek null yapildi).</div>
-      <div class="quiz-feedback incorrect-feedback">&#10007; Yanlis. Dogru cevap C: JsonNullable'in temel amaci PATCH islemlerinde "JSON'da alan yok" ile "JSON'da alan var ama degeri null" durumlarini birbirinden ayirmaktir.</div>
+      <div class="quiz-feedback correct-feedback">&#10003; Doğru! JsonNullable üç durumu ayırt eder: undefined (alan gönderilmedi), of(değer) (değer var) ve of(null) (bilerek null yapıldı).</div>
+      <div class="quiz-feedback incorrect-feedback">&#10007; Yanlış. Doğru cevap C: JsonNullable'ın temel amacı PATCH işlemlerinde "JSON'da alan yok" ile "JSON'da alan var ama değeri null" durumlarını birbirinden ayırmaktır.</div>
     </div>
     <div class="quiz-question" data-correct="B">
-      <p class="question-text">3. Jackson readerForUpdating yontemi kullanildiginda hangi guvenlik onlemi alinmalidir?</p>
+      <p class="question-text">3. Jackson readerForUpdating yöntemi kullanıldığında hangi güvenlik önlemi alınmalıdır?</p>
       <div class="quiz-options">
-        <button class="quiz-option" data-value="A">A) SSL sertifikasi eklenmelidir</button>
-        <button class="quiz-option" data-value="B">B) @JsonIgnore veya @JsonProperty(access = READ_ONLY) ile hassas alanlar korunmalidir</button>
-        <button class="quiz-option" data-value="C">C) Ayri bir veritabani kullanicisi olusturulmalidir</button>
+        <button class="quiz-option" data-value="A">A) SSL sertifikası eklenmelidir</button>
+        <button class="quiz-option" data-value="B">B) @JsonIgnore veya @JsonProperty(access = READ_ONLY) ile hassas alanlar korunmalıdır</button>
+        <button class="quiz-option" data-value="C">C) Ayrı bir veritabanı kullanıcısı oluşturulmalıdır</button>
       </div>
-      <div class="quiz-feedback correct-feedback">&#10003; Dogru! Entity dogrudan JSON'a acildigi icin id, createdAt, role gibi hassas alanlari @JsonIgnore veya @JsonProperty(access = READ_ONLY) ile korumak gerekir.</div>
-      <div class="quiz-feedback incorrect-feedback">&#10007; Yanlis. Dogru cevap B: Entity dogrudan JSON'a acildigi icin @JsonIgnore veya @JsonProperty(access = READ_ONLY) ile hassas alanlarin (id, createdAt, role) degistirilmesi engellenmelidir.</div>
+      <div class="quiz-feedback correct-feedback">&#10003; Doğru! Entity doğrudan JSON'a açıldığı için id, createdAt, role gibi hassas alanları @JsonIgnore veya @JsonProperty(access = READ_ONLY) ile korumak gerekir.</div>
+      <div class="quiz-feedback incorrect-feedback">&#10007; Yanlış. Doğru cevap B: Entity doğrudan JSON'a açıldığı için @JsonIgnore veya @JsonProperty(access = READ_ONLY) ile hassas alanların (id, createdAt, role) değiştirilmesi engellenmelidir.</div>
     </div>
   </div>
 </section>
@@ -440,7 +440,7 @@ public void giveRaise(String department) {
     List&lt;Employee&gt; employees = employeeRepository.findByDepartment(department);
     for (Employee emp : employees) {
         emp.setSalary(emp.getSalary().multiply(new BigDecimal("1.10")));
-        // Hibernate her biri icin ayri UPDATE atar!
+        // Hibernate her biri için ayrı UPDATE atar!
     }
 }</code></pre>
   </div>
@@ -451,7 +451,7 @@ public void giveRaise(String department) {
     <pre><code class="language-java">@Modifying
 @Query("UPDATE Employee e SET e.salary = e.salary * 1.10 WHERE e.department = :dept")
 int bulkRaise(@Param("dept") String department);
-// 1000 kayit olsa bile tek bir UPDATE sorgusu calisir.</code></pre>
+// 1000 kayıt olsa bile tek bir UPDATE sorgusu çalışır.</code></pre>
   </div>
 
   <h3>16.2 N+1 SELECT Problemi (Lazy Loading Tuzağı)</h3>
@@ -465,8 +465,8 @@ private List&lt;OrderItem&gt; items;
 // Kodda:
 List&lt;Order&gt; orders = orderRepository.findAll();  // 1 SELECT
 for (Order order : orders) {
-    order.getItems().size();  // Her siparis icin 1 SELECT daha!
-    // 100 siparis = 1 + 100 = 101 sorgu!
+    order.getItems().size();  // Her sipariş için 1 SELECT daha!
+    // 100 sipariş = 1 + 100 = 101 sorgu!
 }</code></pre>
   </div>
 
@@ -510,7 +510,7 @@ public void processAllProducts() {
     <pre><code class="language-java">@Transactional(readOnly = true)
 public List&lt;Product&gt; getAllProducts() {
     return productRepository.findAll();
-    // readOnly = true: Snapshot alinmaz -> Bellek yariya iner
+    // readOnly = true: Snapshot alınmaz -> Bellek yarıya iner
 }</code></pre>
   </div>
 
@@ -518,7 +518,7 @@ public List&lt;Product&gt; getAllProducts() {
     <h4>✅ Doğru — Çözüm 2: DTO Projection (En iyi çözüm)</h4>
     <pre><code class="language-java">@Query("SELECT new com.example.dto.ProductSummary(p.id, p.name, p.price) FROM Product p")
 List&lt;ProductSummary&gt; findAllSummaries();
-// DTO'lar MANAGED olmaz. Snapshot alinmaz. Minimum bellek kullanir.</code></pre>
+// DTO'lar MANAGED olmaz. Snapshot alınmaz. Minimum bellek kullanır.</code></pre>
   </div>
 
   <div class="good-practice">
@@ -534,9 +534,9 @@ List&lt;ProductSummary&gt; findAllSummaries();
     <pre><code class="language-java">@PostMapping("/update")
 public void update(@RequestBody Product product) {
     product.setPrice(new BigDecimal("999"));
-    // Bu degisiklik DB'ye YANSIMAZ! product Detached.
-    // productRepository.save(product) yazsan bile merge() calisir ki
-    // bu da guvenlik acigi olabilir (client tum alanlari kontrol eder).
+    // Bu değişiklik DB'ye YANSIMAZ! product Detached.
+    // productRepository.save(product) yazsan bile merge() çalışır ki
+    // bu da güvenlik açığı olabilir (client tüm alanları kontrol eder).
 }</code></pre>
   </div>
 
@@ -570,7 +570,7 @@ public void updatePrice(Long id, BigDecimal newPrice) {
         <button class="quiz-option" data-value="B">B) Tüm verileri tek seferde belleğe yüklemek</button>
         <button class="quiz-option" data-value="C">C) DTO Projection ile sadece ihtiyaç duyulan verileri çekmek</button>
       </div>
-      <div class="quiz-feedback correct-feedback">✓ Doğru! DTO Projection en iyi çözümdür — Entity değil, sadece ihtiyacınız olan alanları çeker.</div>
+      <div class="quiz-feedback correct-feedback">✓ Doğru! DTO Projection en iyi çözümdür — Entity değil, sadece ihtiyaçınız olan alanları çeker.</div>
       <div class="quiz-feedback incorrect-feedback">✗ Yanlış. Doğru cevap: C) DTO Projection — en iyi çözüm olarak önerilmektedir.</div>
     </div>
     <div class="quiz-question" data-correct="A">
@@ -590,7 +590,7 @@ public void updatePrice(Long id, BigDecimal newPrice) {
 <section class="tutorial-section" id="section-17" data-section="17">
   <h2 class="section-title"><span class="section-number">17</span> Proje Kurulumu (Spring Boot)</h2>
 
-  <h3>17.1 Maven Bagimliliklari (pom.xml)</h3>
+  <h3>17.1 Maven Bağımlılıkları (pom.xml)</h3>
 
 <pre><code class="language-xml">&lt;?xml version="1.0" encoding="UTF-8"?&gt;
 &lt;project xmlns="http://maven.apache.org/POM/4.0.0"
@@ -641,14 +641,14 @@ public void updatePrice(Long id, BigDecimal newPrice) {
             &lt;version&gt;${mapstruct.version}&lt;/version&gt;
         &lt;/dependency&gt;
 
-        &lt;!-- JsonNullable (Gercek PATCH destegi) --&gt;
+        &lt;!-- JsonNullable (Gerçek PATCH desteği) --&gt;
         &lt;dependency&gt;
             &lt;groupId&gt;org.openapitools&lt;/groupId&gt;
             &lt;artifactId&gt;jackson-databind-nullable&lt;/artifactId&gt;
             &lt;version&gt;0.2.6&lt;/version&gt;
         &lt;/dependency&gt;
 
-        &lt;!-- jOOQ (Opsiyonel - Karmasik sorgular icin) --&gt;
+        &lt;!-- jOOQ (Opsiyonel - Karmaşık sorgular için) --&gt;
         &lt;dependency&gt;
             &lt;groupId&gt;org.springframework.boot&lt;/groupId&gt;
             &lt;artifactId&gt;spring-boot-starter-jooq&lt;/artifactId&gt;
@@ -715,12 +715,12 @@ public void updatePrice(Long id, BigDecimal newPrice) {
 
   jpa:
     hibernate:
-      ddl-auto: validate  # Prod'da validate, dev'de update kullanilabilir
-    show-sql: true         # Gelistirmede SQL'leri gor
+      ddl-auto: validate  # Prod'da validate, dev'de update kullanılabilir
+    show-sql: true         # Geliştirmede SQL'leri gör
     properties:
       hibernate:
         format_sql: true
-        default_batch_fetch_size: 16  # N+1 problemi icin batch fetch
+        default_batch_fetch_size: 16  # N+1 problemi için batch fetch
         jdbc:
           batch_size: 50    # Toplu INSERT/UPDATE optimizasyonu
 
@@ -731,10 +731,10 @@ public void updatePrice(Long id, BigDecimal newPrice) {
       directory.root: ./data/search-index</code></pre>
 
   <div class="tip-box">
-    <p><strong>Ipucu:</strong> Production ortaminda <code>ddl-auto: validate</code> kullanin. Bu ayar, Entity'lerinizin veritabani semasina uygun olup olmadigini kontrol eder ancak semayi degistirmez. Gelistirme ortaminda <code>update</code> kullanabilirsiniz.</p>
+    <p><strong>İpucu:</strong> Production ortamında <code>ddl-auto: validate</code> kullanın. Bu ayar, Entity'lerinizin veritabanı şemasına uygun olup olmadığını kontrol eder ancak şemayı değiştirmez. Geliştirme ortamında <code>update</code> kullanabilirsiniz.</p>
   </div>
 
-  <h3>17.3 Tam Calisan Ornek: Product CRUD API</h3>
+  <h3>17.3 Tam Çalışan Örnek: Product CRUD API</h3>
 
   <h4>DTO'lar</h4>
 
@@ -814,21 +814,21 @@ public class ProductService {
         Product product = mapper.toEntity(dto);
         product.setCreatedAt(LocalDateTime.now());
         product.setStatus(ProductStatus.ACTIVE);
-        Product saved = repository.save(product);  // save() ZORUNLU (yeni kayit)
+        Product saved = repository.save(product);  // save() ZORUNLU (yeni kayıt)
         return mapper.toResponseDto(saved);
     }
 
     @Transactional(readOnly = true)
     public ProductResponseDTO getById(Long id) {
         Product product = repository.findById(id)
-            .orElseThrow(() -&gt; new ResourceNotFoundException("Urun bulunamadi: " + id));
+            .orElseThrow(() -&gt; new ResourceNotFoundException("Ürün bulunamadı: " + id));
         return mapper.toResponseDto(product);
     }
 
     @Transactional
     public void putProduct(Long id, ProductPutDTO dto) {
         Product product = repository.findById(id).orElseThrow();
-        mapper.updateFromPutDto(dto, product);  // Tum alanlar ezilir
+        mapper.updateFromPutDto(dto, product);  // Tüm alanlar ezilir
         // save() YOK -- Managed Entity
     }
 
@@ -859,11 +859,11 @@ public class ProductService {
 }</code></pre>
 
   <div class="concept-box">
-    <h4>Altin Kural: Fetch - Update - Let Dirty Checking Handle It</h4>
-    <p>Yani: Getir - Guncelle - Hibernate'e birak. Managed Entity'lerde <code>save()</code> cagirmak gereksizdir; Dirty Checking degisiklikleri otomatik olarak veritabanina yansitir. Ancak yeni kayit olustururken <code>save()</code> zorunludur.</p>
+    <h4>Altın Kural: Fetch - Update - Let Dirty Checking Handle It</h4>
+    <p>Yani: Getir - Güncelle - Hibernate'e bırak. Managed Entity'lerde <code>save()</code> çağırmak gereksizdir; Dirty Checking değişiklikleri otomatik olarak veritabanına yansıtır. Ancak yeni kayıt oluştururken <code>save()</code> zorunludur.</p>
   </div>
 
-  <h3>Ozet: Hangi Araci Ne Zaman Kullan?</h3>
+  <h3>Özet: Hangi Aracı Ne Zaman Kullan?</h3>
 
   <table class="info-table">
     <thead>
@@ -880,19 +880,19 @@ public class ProductService {
         <td>Minimum kod, otomatik sorgular</td>
       </tr>
       <tr>
-        <td>Karmasik okuma/rapor</td>
+        <td>Karmaşık okuma/rapor</td>
         <td>jOOQ</td>
-        <td>Tip guvenli SQL, tam kontrol</td>
+        <td>Tip güvenli SQL, tam kontrol</td>
       </tr>
       <tr>
-        <td>Toplu guncelleme</td>
+        <td>Toplu güncelleme</td>
         <td>@Modifying JPQL veya jOOQ</td>
-        <td>N+1 problemini onler</td>
+        <td>N+1 problemini önler</td>
       </tr>
       <tr>
-        <td>DDD / Sihirsiz yaklasim</td>
+        <td>DDD / Sihirsiz yaklaşım</td>
         <td>Spring Data JDBC</td>
-        <td>Persistence Context yok, acik ve net</td>
+        <td>Persistence Context yok, açık ve net</td>
       </tr>
       <tr>
         <td>Tam metin arama</td>
@@ -907,47 +907,47 @@ public class ProductService {
       <tr>
         <td>DTO Mapping</td>
         <td>MapStruct</td>
-        <td>Derleme zamani, hizli, guvenli</td>
+        <td>Derleme zamanı, hızlı, güvenli</td>
       </tr>
       <tr>
-        <td>Gercek PATCH destegi</td>
+        <td>Gerçek PATCH desteği</td>
         <td>JsonNullable</td>
-        <td>null vs undefined ayrimi</td>
+        <td>null vs undefined ayrımı</td>
       </tr>
     </tbody>
   </table>
 
   <div class="quiz-container" data-section="17">
-    <h3 class="quiz-title">Bilgi Kontrolu</h3>
+    <h3 class="quiz-title">Bilgi Kontrolü</h3>
     <div class="quiz-question" data-correct="B">
-      <p class="question-text">1. Spring Boot projesinde MapStruct'i kullanmak icin maven-compiler-plugin'de ne yapilandirmak gerekir?</p>
+      <p class="question-text">1. Spring Boot projesinde MapStruct'i kullanmak için maven-compiler-plugin'de ne yapılandırmak gerekir?</p>
       <div class="quiz-options">
         <button class="quiz-option" data-value="A">A) Maven Shade Plugin eklenmeli</button>
-        <button class="quiz-option" data-value="B">B) annotationProcessorPaths icinde mapstruct-processor tanimlanmali</button>
+        <button class="quiz-option" data-value="B">B) annotationProcessorPaths içinde mapstruct-processor tanımlanmalı</button>
         <button class="quiz-option" data-value="C">C) Sadece mapstruct dependency eklemek yeterlidir</button>
       </div>
-      <div class="quiz-feedback correct-feedback">&#10003; Dogru! MapStruct derleme zamaninda kod uretir, bu nedenle maven-compiler-plugin icinde annotationProcessorPaths yapilandirmasinda mapstruct-processor tanimlanmalidir.</div>
-      <div class="quiz-feedback incorrect-feedback">&#10007; Yanlis. Dogru cevap B: MapStruct bir annotation processor oldugu icin maven-compiler-plugin icerisinde annotationProcessorPaths ile mapstruct-processor tanimlanmalidir.</div>
+      <div class="quiz-feedback correct-feedback">&#10003; Doğru! MapStruct derleme zamanında kod üretir, bu nedenle maven-compiler-plugin içinde annotationProcessorPaths yapılandırmasında mapstruct-processor tanımlanmalıdır.</div>
+      <div class="quiz-feedback incorrect-feedback">&#10007; Yanlış. Doğru cevap B: MapStruct bir annotation processor olduğu için maven-compiler-plugin içerisinde annotationProcessorPaths ile mapstruct-processor tanımlanmalıdır.</div>
     </div>
     <div class="quiz-question" data-correct="A">
-      <p class="question-text">2. Production ortaminda hibernate ddl-auto icin hangi deger kullanilmalidir?</p>
+      <p class="question-text">2. Production ortamında hibernate ddl-auto için hangi değer kullanılmalıdır?</p>
       <div class="quiz-options">
         <button class="quiz-option" data-value="A">A) validate</button>
         <button class="quiz-option" data-value="B">B) update</button>
         <button class="quiz-option" data-value="C">C) create-drop</button>
       </div>
-      <div class="quiz-feedback correct-feedback">&#10003; Dogru! Production ortaminda <code>validate</code> kullanilmalidir. Bu ayar Entity'lerin veritabani semasina uygunlugunu dogrular ancak semayi degistirmez.</div>
-      <div class="quiz-feedback incorrect-feedback">&#10007; Yanlis. Dogru cevap A: Production'da <code>validate</code> kullanilmalidir. <code>update</code> gelistirme ortami icin uygundur, <code>create-drop</code> ise sadece test icin kullanilir.</div>
+      <div class="quiz-feedback correct-feedback">&#10003; Doğru! Production ortamında <code>validate</code> kullanılmalıdır. Bu ayar Entity'lerin veritabanı şemasına uygunluğunu doğrular ancak şemayı değiştirmez.</div>
+      <div class="quiz-feedback incorrect-feedback">&#10007; Yanlış. Doğru cevap A: Production'da <code>validate</code> kullanılmalıdır. <code>update</code> geliştirme ortamı için uygundur, <code>create-drop</code> ise sadece test için kullanılır.</div>
     </div>
     <div class="quiz-question" data-correct="C">
-      <p class="question-text">3. Yeni bir Entity kaydederken neden save() cagrisi zorunludur?</p>
+      <p class="question-text">3. Yeni bir Entity kaydederken neden save() çağrısı zorunludur?</p>
       <div class="quiz-options">
         <button class="quiz-option" data-value="A">A) Dirty Checking yeni nesneleri desteklemez</button>
-        <button class="quiz-option" data-value="B">B) Spring Data JPA'nin bir kisitlamasidir</button>
-        <button class="quiz-option" data-value="C">C) Yeni nesne henuz Persistence Context'te degildir ve managed duruma gecmesi icin save()/persist() gerekir</button>
+        <button class="quiz-option" data-value="B">B) Spring Data JPA'nın bir kısıtlamasıdır</button>
+        <button class="quiz-option" data-value="C">C) Yeni nesne henüz Persistence Context'te değildir ve managed duruma geçmesi için save()/persist() gerekir</button>
       </div>
-      <div class="quiz-feedback correct-feedback">&#10003; Dogru! Yeni olusturulan nesneler transient durumdadir ve Persistence Context'te degildir. save() veya persist() cagrisi ile managed duruma gecirilmeleri gerekir.</div>
-      <div class="quiz-feedback incorrect-feedback">&#10007; Yanlis. Dogru cevap C: Yeni nesneler transient durumda olup Persistence Context'e dahil degildir. Managed duruma gecmeleri ve INSERT sorgusunun olusturulmasi icin save()/persist() cagrisi gereklidir.</div>
+      <div class="quiz-feedback correct-feedback">&#10003; Doğru! Yeni oluşturulan nesneler transient durumdadır ve Persistence Context'te değildir. save() veya persist() çağrısı ile managed duruma geçirilmeleri gerekir.</div>
+      <div class="quiz-feedback incorrect-feedback">&#10007; Yanlış. Doğru cevap C: Yeni nesneler transient durumda olup Persistence Context'e dahil değildir. Managed duruma geçmeleri ve INSERT sorgusunun oluşturulması için save()/persist() çağrısı gereklidir.</div>
     </div>
   </div>
 </section>
